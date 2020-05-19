@@ -1,50 +1,18 @@
 import re
 import pandas as pd
+import numpy as np
 
-def void_term(x, word_list, print_word=False, return_bool=False):
-    c_list = []
-    breaker = False
-    term_present = False
-    for sentence in x:
-        for word in word_list:
-            if word in sentence:
-                if print_word:
-                    print("word is: ", word, "in sentence: ", sentence)
-                term_present = True
-                breaker = True
-                break
-        if not breaker:
-            c_list.append(sentence.strip())
-        breaker = False
-    if return_bool:
-        return not term_present
-    else:
-        return c_list
-
-def validate_term(x, word_list, print_word=False, return_bool=False):
-    c_list = []
-    term_present = False
-    for sentence in x:
-        for word in word_list:
-            if word in sentence:
-                c_list.append(sentence.strip())
-                term_present = True
-                if print_word:
-                    print("word is: ", word, "in sentence: ", sentence)
-                break
-    if return_bool:
-        return term_present
-    else:
-        return c_list
+from .nlp import void_term, validate_term
 
 class WordParser():
-    def __init__(self, c_df):
+    def __init__(self, c_df, terms_xlsx):
         self.c_df = c_df
+        self.terms = terms_xlsx
         self.criteria = False
         self.text_df=None
 
     def prepare_criteria(self):
-        terms = pd.read_excel('./terms.xlsx')
+        terms = pd.read_excel(self.terms)
         self.inappropriate = terms['inappropriate'].dropna().tolist()
         self.post_op_terms = terms['postop'].dropna().tolist()
         self.criteria = True
@@ -156,13 +124,13 @@ class WordParser():
 
         self.safe_text = text_df
 
-def read_montage(montage_file):
+def read_montage(montage_file, terms_file):
 
     montage_scfe = pd.read_excel(montage_file)
-    short_montage = montage_scfe[['Organization', 'Accession Number', 'Report Text', 'Patient Sex', 'Patient Age', 'Patient MRN', 'Patient First Name', 'Patient Last Name', 'Exam Completed Date']]
-    short_montage = short_montage.drop_duplicates(subset=['Accession Number'])
+    montage_scfe = montage_scfe.drop_duplicates(subset=['Accession Number'])
+    short_montage = montage_scfe[['Organization', 'Accession Number', 'Report Text', 'Patient Sex', 'Patient Age', 'Patient MRN', 'Patient First Name', 'Patient Last Name', 'Exam Completed Date']].copy()
 
-    montage = WordParser(montage_scfe)
+    montage = WordParser(montage_scfe, terms_file)
     montage.prepare_criteria()
 
     # use impression since many reports don't have findings.
@@ -172,8 +140,77 @@ def read_montage(montage_file):
 
     safe_text_df = montage.safe_text
     short_montage['postop_bool'] = safe_text_df['postop_bool']
+    short_montage['mingle_addendum'] = safe_text_df['mingle_addendum']
     short_montage = short_montage[safe_text_df['safe_bool']].copy()
 
     print('montage_n {}'.format(short_montage.shape))
 
     return short_montage
+
+def merge_slice_dfs(gt_df, montage_df, params=None):
+    if params is None:
+        params = {'orig_surg_date': 'ORIG_SERVICE_DATE',
+        'pat_id': 'PAT_ID',
+        'non_montage_age': 'AGE',
+        'non_montage_first_name': 'first_name',
+        'non_montage_last_name': 'last_name'}
+
+    orig_surg_date = params['orig_surg_date']
+    c_id = params['pat_id']
+    age = params['non_montage_age']
+    first_name = params['non_montage_first_name']
+    last_name = params['non_montage_last_name']
+
+    both_df = pd.merge(gt_df, montage_df, how='left',
+                       left_on=[first_name, last_name],
+                       right_on=['Patient First Name', 'Patient Last Name'])
+    both_df['Patient MRN'] = both_df['Patient MRN'].fillna(7).map(np.int32)
+    print('pat_ID nunique: {}'.format(both_df[c_id].nunique()))
+
+    both_df['Exam Completed Date'] = both_df['Exam Completed Date'].fillna(pd.Timestamp('2005-01-01'))
+    both_df[orig_surg_date] = both_df[orig_surg_date].fillna(pd.Timestamp('2000-01-01'))
+    both_df['time_diff'] = both_df['Exam Completed Date'] - both_df[orig_surg_date]
+    both_df['time_diff'] = both_df['time_diff'].map(lambda x: x.days)
+
+    both_df['age_diff'] = both_df[age] - both_df['Patient Age']
+    both_df['age_diff'] = both_df['age_diff'].map(np.abs)
+
+    prefilter_df = both_df.copy()
+    pre_filter = (both_df['age_diff'] < 1) & (both_df['time_diff'] > -60) & (both_df['time_diff'] < 120)
+    print('before pre_filter pat_ID ', both_df[c_id].unique().shape)
+    both_df = both_df[pre_filter].copy()
+    print('after pre_filter pat_ID ', both_df[c_id].unique().shape)
+
+    prior_filter = (both_df['time_diff'] < 0) & (both_df['time_diff'] > -60)
+    def_prior_patid = both_df[prior_filter][c_id].unique()
+    zero_prior_idx = both_df[(both_df['time_diff'] == 0) & (both_df['postop_bool'] == False)].index
+    zero_is_prior_patid = both_df.loc[zero_prior_idx, c_id].unique()  # if time zero and not postop
+    def_prior_patid = np.concatenate([def_prior_patid, zero_is_prior_patid])
+    def_prior_patid = pd.Series(def_prior_patid).unique()  # unique mrns
+
+    after_filter = (both_df['time_diff'] > 0) & (both_df['time_diff'] < 120)
+    def_after_patid = both_df[after_filter][c_id].unique()
+
+    zero_postop_filter = (both_df['time_diff'] == 0) & (both_df['postop_bool'] == True)
+    zero_postop_padid = both_df[zero_postop_filter][c_id].unique()
+    combined_after_and_postop_zero_patid = pd.Series(np.concatenate([def_after_patid, zero_postop_padid])).unique()
+
+    both_df['prior'] = both_df[c_id].isin(def_prior_patid)
+    both_df['after'] = both_df[c_id].isin(combined_after_and_postop_zero_patid)
+
+    both_df['prior_after'] = (both_df['prior'] & both_df['after'])
+    both_df['only_prior'] = (both_df['prior'] & ~both_df['after'])
+    both_df['only_after'] = (~both_df['prior'] & both_df['after'])
+
+    both_df = both_df[['Organization', orig_surg_date, age, first_name, last_name,
+                       'Accession Number', 'Report Text', 'Patient Sex',
+                       'Patient MRN', c_id,
+                       'Exam Completed Date', 'time_diff', 'prior', 'after',
+                       'prior_after', 'only_prior', 'only_after', 'postop_bool']]
+
+    no_prior_df = prefilter_df[~prefilter_df[c_id].isin(def_prior_patid)].drop_duplicates(subset=[c_id])
+    no_prior_patID = no_prior_df[c_id].unique()  # no MRN = 7, so many cases have MRN of 7
+    prior_df = both_df[both_df[c_id].isin(def_prior_patid)]
+    print('prior_unique_patid: {}, no_prior_patID {}\n'.format(len(def_prior_patid), len(no_prior_patID)))
+
+    return prior_df, no_prior_df
