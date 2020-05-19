@@ -14,6 +14,7 @@ class WordParser():
     def prepare_criteria(self):
         terms = pd.read_excel(self.terms)
         self.inappropriate = terms['inappropriate'].dropna().tolist()
+        self.incorrect = terms['incorrect'].dropna().tolist()
         self.post_op_terms = terms['postop'].dropna().tolist()
         self.criteria = True
 
@@ -108,15 +109,15 @@ class WordParser():
 
         text_df = self.text_df.copy()
 
-        inappropriate_terms = self.inappropriate
+        void_terms = self.inappropriate + self.incorrect
         post_op_terms = self.post_op_terms
 
         # Remember that void and validate terms return_bool will be True/False for the WHOLE LIST if even a single word is found
-        inappropriate_bool = text_df['text_IP'].map(lambda x: void_term(x, inappropriate_terms, return_bool=True, print_word=print_word))
+        void_bool = text_df['text_IP'].map(lambda x: void_term(x, void_terms, return_bool=True, print_word=print_word))
         # no_relevant_text_bool = text_df['text_IP'].map(lambda x: void_term(x, ['Unicorn'], return_bool=True, print_word=print_word))
         no_relevant_text_bool = ~text_df['No relevant text']
         mingle_bool = ~text_df['mingle_addendum']
-        filter_bool = inappropriate_bool & no_relevant_text_bool #all needs to be True
+        filter_bool = void_bool & no_relevant_text_bool #all needs to be True
         text_df['safe_bool'] = filter_bool
 
         post_op_bool =text_df['text_IP'].map(lambda x: validate_term(x, post_op_terms, return_bool=True, print_word=print_word))
@@ -126,21 +127,24 @@ class WordParser():
 
 def read_montage(montage_file, terms_file):
 
-    montage_scfe = pd.read_excel(montage_file)
-    montage_scfe = montage_scfe.drop_duplicates(subset=['Accession Number'])
-    short_montage = montage_scfe[['Organization', 'Accession Number', 'Report Text', 'Patient Sex', 'Patient Age', 'Patient MRN', 'Patient First Name', 'Patient Last Name', 'Exam Completed Date']].copy()
+    montage_df = pd.read_excel(montage_file)
+    montage_df = montage_df.drop_duplicates(subset=['Accession Number'])
+    short_montage = montage_df[['Organization', 'Accession Number', 'Report Text', 'Patient Sex',
+                                  'Patient Age', 'Patient MRN', 'Patient First Name', 'Patient Last Name',
+                                  'Exam Completed Date']].copy()
 
-    montage = WordParser(montage_scfe, terms_file)
-    montage.prepare_criteria()
+    processed_montage = WordParser(montage_df, terms_file)
+    processed_montage.prepare_criteria()
 
     # use impression since many reports don't have findings.
     # use impression for hardware so it's not too specific
-    montage.clean_text(get_findings=False)
-    montage.filter_text()
+    processed_montage.clean_text(get_findings=False)
+    processed_montage.filter_text()
 
-    safe_text_df = montage.safe_text
+    safe_text_df = processed_montage.safe_text
     short_montage['postop_bool'] = safe_text_df['postop_bool']
     short_montage['mingle_addendum'] = safe_text_df['mingle_addendum']
+    short_montage['text_IP'] = safe_text_df['text_IP']
     short_montage = short_montage[safe_text_df['safe_bool']].copy()
 
     print('montage_n {}'.format(short_montage.shape))
@@ -176,12 +180,12 @@ def merge_slice_dfs(gt_df, montage_df, params=None):
     both_df['age_diff'] = both_df['age_diff'].map(np.abs)
 
     prefilter_df = both_df.copy()
-    pre_filter = (both_df['age_diff'] < 1) & (both_df['time_diff'] > -60) & (both_df['time_diff'] < 120)
+    pre_filter = (both_df['age_diff'] < 1) & (both_df['time_diff'] > -90) & (both_df['time_diff'] < 120)
     print('before pre_filter pat_ID ', both_df[c_id].unique().shape)
     both_df = both_df[pre_filter].copy()
     print('after pre_filter pat_ID ', both_df[c_id].unique().shape)
 
-    prior_filter = (both_df['time_diff'] < 0) & (both_df['time_diff'] > -60)
+    prior_filter = (both_df['time_diff'] < 0) & (both_df['time_diff'] > -90)
     def_prior_patid = both_df[prior_filter][c_id].unique()
     zero_prior_idx = both_df[(both_df['time_diff'] == 0) & (both_df['postop_bool'] == False)].index
     zero_is_prior_patid = both_df.loc[zero_prior_idx, c_id].unique()  # if time zero and not postop
@@ -206,11 +210,13 @@ def merge_slice_dfs(gt_df, montage_df, params=None):
                        'Accession Number', 'Report Text', 'Patient Sex',
                        'Patient MRN', c_id,
                        'Exam Completed Date', 'time_diff', 'prior', 'after',
-                       'prior_after', 'only_prior', 'only_after', 'postop_bool']]
+                       'prior_after', 'only_prior', 'only_after', 'postop_bool', 'text_IP']]
 
-    no_prior_df = prefilter_df[~prefilter_df[c_id].isin(def_prior_patid)].drop_duplicates(subset=[c_id])
+    no_prior_df = prefilter_df[~prefilter_df[c_id].isin(def_prior_patid)].drop_duplicates(subset=[c_id]).copy()
     no_prior_patID = no_prior_df[c_id].unique()  # no MRN = 7, so many cases have MRN of 7
-    prior_df = both_df[both_df[c_id].isin(def_prior_patid)]
+    prior_df = both_df[both_df[c_id].isin(def_prior_patid)].copy()
+    print('changed')
+    prior_df['Accession Number'] = pd.to_numeric(prior_df['Accession Number'], downcast='unsigned')
     print('prior_unique_patid: {}, no_prior_patID {}\n'.format(len(def_prior_patid), len(no_prior_patID)))
 
     return prior_df, no_prior_df
