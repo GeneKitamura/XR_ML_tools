@@ -151,7 +151,7 @@ def read_montage(montage_file, terms_file):
 
     return short_montage
 
-def merge_slice_dfs(gt_df, montage_df, params=None):
+def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=120, prior_is_nonop=False):
     if params is None:
         params = {'orig_surg_date': 'ORIG_SERVICE_DATE',
         'pat_id': 'PAT_ID',
@@ -180,24 +180,26 @@ def merge_slice_dfs(gt_df, montage_df, params=None):
     both_df['age_diff'] = both_df['age_diff'].map(np.abs)
 
     prefilter_df = both_df.copy()
-    pre_filter = (both_df['age_diff'] < 1) & (both_df['time_diff'] > -90) & (both_df['time_diff'] < 120)
-    print('before pre_filter pat_ID ', both_df[c_id].unique().shape)
+    pre_filter = (both_df['age_diff'] < 1) & (both_df['time_diff'] > prior_date) & (both_df['time_diff'] < after_date)
+    # print('before pre_filter pat_ID ', both_df[c_id].unique().shape)
     both_df = both_df[pre_filter].copy()
-    print('after pre_filter pat_ID ', both_df[c_id].unique().shape)
+    # print('after pre_filter pat_ID ', both_df[c_id].unique().shape)
 
-    prior_filter = (both_df['time_diff'] < 0) & (both_df['time_diff'] > -90)
+    prior_filter = (both_df['time_diff'] < 0) & (both_df['time_diff'] > prior_date)
+    if prior_is_nonop:
+        prior_filter = prior_filter & (both_df['postop_bool'] == False)
     def_prior_patid = both_df[prior_filter][c_id].unique()
     zero_prior_idx = both_df[(both_df['time_diff'] == 0) & (both_df['postop_bool'] == False)].index
     zero_is_prior_patid = both_df.loc[zero_prior_idx, c_id].unique()  # if time zero and not postop
     def_prior_patid = np.concatenate([def_prior_patid, zero_is_prior_patid])
     def_prior_patid = pd.Series(def_prior_patid).unique()  # unique mrns
 
-    after_filter = (both_df['time_diff'] > 0) & (both_df['time_diff'] < 120)
+    after_filter = (both_df['time_diff'] > 0) & (both_df['time_diff'] < after_date)
     def_after_patid = both_df[after_filter][c_id].unique()
 
     zero_postop_filter = (both_df['time_diff'] == 0) & (both_df['postop_bool'] == True)
-    zero_postop_padid = both_df[zero_postop_filter][c_id].unique()
-    combined_after_and_postop_zero_patid = pd.Series(np.concatenate([def_after_patid, zero_postop_padid])).unique()
+    zero_postop_patid = both_df[zero_postop_filter][c_id].unique()
+    combined_after_and_postop_zero_patid = pd.Series(np.concatenate([def_after_patid, zero_postop_patid])).unique()
 
     both_df['prior'] = both_df[c_id].isin(def_prior_patid)
     both_df['after'] = both_df[c_id].isin(combined_after_and_postop_zero_patid)
@@ -212,11 +214,54 @@ def merge_slice_dfs(gt_df, montage_df, params=None):
                        'Exam Completed Date', 'time_diff', 'prior', 'after',
                        'prior_after', 'only_prior', 'only_after', 'postop_bool', 'text_IP']]
 
+    #get rid of invalid accession and associated PAT_ID
+    prior_df = both_df[both_df[c_id].isin(def_prior_patid)].copy()
+    prior_df['Accession Number'] = pd.to_numeric(prior_df['Accession Number'], errors='coerce', downcast='unsigned')
+    invalid_accession_idx = prior_df[~pd.to_numeric(prior_df['Accession Number'], errors='coerce').notna()].index
+    prior_df = prior_df[~prior_df.index.isin(invalid_accession_idx)].copy()
+    # redefine prior_patid
+    def_prior_patid = prior_df[c_id].unique()
+
+    # drop duplicates from no_prior_df
     no_prior_df = prefilter_df[~prefilter_df[c_id].isin(def_prior_patid)].drop_duplicates(subset=[c_id]).copy()
     no_prior_patID = no_prior_df[c_id].unique()  # no MRN = 7, so many cases have MRN of 7
-    prior_df = both_df[both_df[c_id].isin(def_prior_patid)].copy()
-    print('changed')
-    prior_df['Accession Number'] = pd.to_numeric(prior_df['Accession Number'], downcast='unsigned')
+
     print('prior_unique_patid: {}, no_prior_patID {}\n'.format(len(def_prior_patid), len(no_prior_patID)))
 
     return prior_df, no_prior_df
+
+def format_no_montage_dfs(first_no_montage, remain_no_montage, params, to_save=None):
+
+    pid = params['id']
+    dob = params['dob']
+    surg_date = params['op_date']
+    fname = params['first_name']
+    lname = params['last_name']
+
+    first_no_montage['first_op'] = 'yes'
+    remain_no_montage['first_op'] = 'no'
+    tot_no_montage_df = pd.concat([first_no_montage, remain_no_montage], axis=0)
+    # sort by PID and surg_date
+    tot_no_montage_df = tot_no_montage_df.sort_values([pid, surg_date], ascending=[True, True])
+
+    tot_no_montage_df = tot_no_montage_df[[surg_date, fname, lname, dob, pid, 'first_op']].copy()
+
+    tot_no_montage_df['Patient_MRN'] = ''
+    tot_no_montage_df['Pre_op_Organization'] = ''
+    tot_no_montage_df['Pre_op_Accession_#'] = ''
+    tot_no_montage_df['Pre_op_study_date'] = ''
+    tot_no_montage_df['Side_with_abnormality'] = ''
+    tot_no_montage_df['Post_op_Organization'] = ''
+    tot_no_montage_df['Post_op_Accession_#'] = ''
+    tot_no_montage_df['Post_op_study_date'] = ''
+    tot_no_montage_df['Note'] = ''
+
+    if to_save is not None:
+        tot_no_montage_df[surg_date] = tot_no_montage_df[surg_date].dt.date
+        tot_no_montage_df[dob] = tot_no_montage_df[dob].dt.date
+
+        # pd.to_datetime(tot_no_montage_df.loc["DOB"]) # to change back to datetime
+
+        tot_no_montage_df.to_excel(to_save)
+
+    return tot_no_montage_df
