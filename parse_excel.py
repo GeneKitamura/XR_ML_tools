@@ -216,7 +216,10 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
 
     #get rid of invalid accession and associated PAT_ID
     prior_df = both_df[both_df[c_id].isin(def_prior_patid)].copy()
-    prior_df['Accession Number'] = pd.to_numeric(prior_df['Accession Number'], errors='coerce', downcast='unsigned')
+    try:
+        prior_df['Accession Number'] = pd.to_numeric(prior_df['Accession Number'], errors='coerce', downcast='unsigned')
+    except ValueError: # if a df is empty, will result in error when trying to downcast
+        pass
     invalid_accession_idx = prior_df[~pd.to_numeric(prior_df['Accession Number'], errors='coerce').notna()].index
     prior_df = prior_df[~prior_df.index.isin(invalid_accession_idx)].copy()
     # redefine prior_patid
@@ -230,7 +233,7 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
 
     return prior_df, no_prior_df
 
-def format_no_montage_dfs(first_no_montage, remain_no_montage, params, to_save=None):
+def format_no_montage_dfs(first_no_montage, remain_no_montage, params, to_save=None, additional_columns=None):
 
     pid = params['id']
     dob = params['dob']
@@ -244,7 +247,12 @@ def format_no_montage_dfs(first_no_montage, remain_no_montage, params, to_save=N
     # sort by PID and surg_date
     tot_no_montage_df = tot_no_montage_df.sort_values([pid, surg_date], ascending=[True, True])
 
-    tot_no_montage_df = tot_no_montage_df[[surg_date, fname, lname, dob, pid, 'first_op']].copy()
+    relevant_columns = [surg_date, fname, lname, dob, pid, 'first_op']
+
+    if additional_columns is not None:
+        relevant_columns = relevant_columns + additional_columns
+
+    tot_no_montage_df = tot_no_montage_df[relevant_columns].copy()
 
     tot_no_montage_df['Patient_MRN'] = ''
     tot_no_montage_df['Pre_op_Organization'] = ''
