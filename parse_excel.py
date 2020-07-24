@@ -14,7 +14,7 @@ class WordParser():
     def prepare_criteria(self):
         terms = pd.read_excel(self.terms)
         self.inappropriate = terms['inappropriate'].dropna().tolist()
-        self.incorrect = terms['incorrect'].dropna().tolist()
+        self.incorrect = terms['incorrect'].dropna().tolist() #just skull
         self.post_op_terms = terms['postop'].dropna().tolist()
         self.criteria = True
 
@@ -99,7 +99,7 @@ class WordParser():
         self.text_series = stripped_series
         self.text_df = text_df
 
-    def filter_text(self, print_word=False):
+    def filter_text(self, print_word=False, exclude_mingle=False):
 
         if self.text_df is None:
             self.clean_text()
@@ -118,6 +118,9 @@ class WordParser():
         no_relevant_text_bool = ~text_df['No relevant text']
         mingle_bool = ~text_df['mingle_addendum']
         filter_bool = void_bool & no_relevant_text_bool #all needs to be True
+        if exclude_mingle:
+            filter_bool = filter_bool & mingle_bool
+
         text_df['safe_bool'] = filter_bool
 
         post_op_bool =text_df['text_IP'].map(lambda x: validate_term(x, post_op_terms, return_bool=True, print_word=print_word))
@@ -125,7 +128,7 @@ class WordParser():
 
         self.safe_text = text_df
 
-def read_montage(montage_file, terms_file):
+def read_montage(montage_file, terms_file, exclude_mingle=False):
 
     montage_df = pd.read_excel(montage_file)
     montage_df = montage_df.drop_duplicates(subset=['Accession Number'])
@@ -139,7 +142,7 @@ def read_montage(montage_file, terms_file):
     # use impression since many reports don't have findings.
     # use impression for hardware so it's not too specific
     processed_montage.clean_text(get_findings=False)
-    processed_montage.filter_text()
+    processed_montage.filter_text(exclude_mingle=exclude_mingle)
 
     safe_text_df = processed_montage.safe_text
     short_montage['postop_bool'] = safe_text_df['postop_bool']
@@ -151,7 +154,7 @@ def read_montage(montage_file, terms_file):
 
     return short_montage
 
-def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=120, prior_is_nonop=False):
+def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=120, prior_is_nonop=False, additional_columns=None):
     if params is None:
         params = {'orig_surg_date': 'ORIG_SERVICE_DATE',
         'pat_id': 'PAT_ID',
@@ -208,11 +211,16 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
     both_df['only_prior'] = (both_df['prior'] & ~both_df['after'])
     both_df['only_after'] = (~both_df['prior'] & both_df['after'])
 
-    both_df = both_df[['Organization', orig_surg_date, age, first_name, last_name,
+    columns = ['Organization', orig_surg_date, age, 'DOB', first_name, last_name,
                        'Accession Number', 'Report Text', 'Patient Sex',
                        'Patient MRN', c_id,
                        'Exam Completed Date', 'time_diff', 'prior', 'after',
-                       'prior_after', 'only_prior', 'only_after', 'postop_bool', 'text_IP']]
+                       'prior_after', 'only_prior', 'only_after', 'postop_bool', 'text_IP']
+
+    if additional_columns is not None:
+        columns = columns + additional_columns
+
+    both_df = both_df[columns]
 
     #get rid of invalid accession and associated PAT_ID
     prior_df = both_df[both_df[c_id].isin(def_prior_patid)].copy()
