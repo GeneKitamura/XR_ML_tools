@@ -154,7 +154,7 @@ def read_montage(montage_file, terms_file, exclude_mingle=False):
 
     return short_montage
 
-def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=120, prior_is_nonop=False, additional_columns=None):
+def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=120, prior_is_nonop=False, additional_columns=None, nonop_zero_is_prior=True):
     if params is None:
         params = {'orig_surg_date': 'ORIG_SERVICE_DATE',
         'pat_id': 'PAT_ID',
@@ -192,15 +192,21 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
     if prior_is_nonop:
         prior_filter = prior_filter & (both_df['postop_bool'] == False)
     def_prior_patid = both_df[prior_filter][c_id].unique()
-    zero_prior_idx = both_df[(both_df['time_diff'] == 0) & (both_df['postop_bool'] == False)].index
-    zero_is_prior_patid = both_df.loc[zero_prior_idx, c_id].unique()  # if time zero and not postop
-    def_prior_patid = np.concatenate([def_prior_patid, zero_is_prior_patid])
-    def_prior_patid = pd.Series(def_prior_patid).unique()  # unique mrns
+
+    if nonop_zero_is_prior:
+        zero_prior_idx = both_df[(both_df['time_diff'] == 0) & (both_df['postop_bool'] == False)].index
+        zero_is_prior_patid = both_df.loc[zero_prior_idx, c_id].unique()  # if time zero and not postop
+        def_prior_patid = np.concatenate([def_prior_patid, zero_is_prior_patid])
+        def_prior_patid = pd.Series(def_prior_patid).unique()  # unique pat_id
 
     after_filter = (both_df['time_diff'] > 0) & (both_df['time_diff'] < after_date)
     def_after_patid = both_df[after_filter][c_id].unique()
 
-    zero_postop_filter = (both_df['time_diff'] == 0) & (both_df['postop_bool'] == True)
+    if nonop_zero_is_prior:
+        zero_postop_filter = (both_df['time_diff'] == 0) & (both_df['postop_bool'] == True)
+    else:
+        zero_postop_filter = (both_df['time_diff'] == 0) # all time zero is an "after" case
+
     zero_postop_patid = both_df[zero_postop_filter][c_id].unique()
     combined_after_and_postop_zero_patid = pd.Series(np.concatenate([def_after_patid, zero_postop_patid])).unique()
 
@@ -211,7 +217,7 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
     both_df['only_prior'] = (both_df['prior'] & ~both_df['after'])
     both_df['only_after'] = (~both_df['prior'] & both_df['after'])
 
-    columns = ['Organization', orig_surg_date, age, 'DOB', first_name, last_name,
+    columns = ['Organization', orig_surg_date, age, first_name, last_name,
                        'Accession Number', 'Report Text', 'Patient Sex',
                        'Patient MRN', c_id,
                        'Exam Completed Date', 'time_diff', 'prior', 'after',
