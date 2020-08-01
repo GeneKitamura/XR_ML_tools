@@ -254,6 +254,8 @@ def format_no_montage_dfs(first_no_montage, remain_no_montage, params, to_save=N
     surg_date = params['op_date']
     fname = params['first_name']
     lname = params['last_name']
+    age = params['AGE']
+    sex = params['SEX']
 
     first_no_montage['first_op'] = 'yes'
     remain_no_montage['first_op'] = 'no'
@@ -261,7 +263,7 @@ def format_no_montage_dfs(first_no_montage, remain_no_montage, params, to_save=N
     # sort by PID and surg_date
     tot_no_montage_df = tot_no_montage_df.sort_values([pid, surg_date], ascending=[True, True])
 
-    relevant_columns = [surg_date, fname, lname, dob, pid, 'first_op']
+    relevant_columns = [surg_date, fname, lname, dob, pid, age, sex, 'first_op']
 
     if additional_columns is not None:
         relevant_columns = relevant_columns + additional_columns
