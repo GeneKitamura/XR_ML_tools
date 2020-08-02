@@ -17,18 +17,22 @@ def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
         "pos_sex": 'Patient Sex',
         "non_pos_age": 'Patient Age',
         "non_pos_sex": 'Patient Sex',
-        'non_pos_fname': 'first_name',
-        'non_pos_lname': 'last_name'
+        'non_pos_fname': 'Patient First Name',
+        'non_pos_lname': 'Patient Last Name'
         }
+    filtered_pos_df = positive_df[pd.to_numeric(positive_df['Patient Age'], errors='coerce').notna()]
+    if not filtered_pos_df['Patient Sex'].isin(['Male', 'Female', '']).all():
+        raise Exception("Check Patient Sex for postive_df")
+    filtered_pos_df = filtered_pos_df[(filtered_pos_df['Patient Sex'] != '')]
 
-    prior_age = positive_df[params['pos_age']]
+    prior_age = filtered_pos_df[params['pos_age']]
     age_hist = plt.hist(prior_age, bins=5)
     age_count, age_bounds, _ = age_hist
     age_proportions = age_count / sum(age_count)
     expected_samples = np.floor(sample_n * age_proportions).astype(np.int32)
 
-    male_n = positive_df[params['pos_sex']].value_counts()['Male']
-    fem_n = positive_df[params['pos_sex']].value_counts()['Female']
+    male_n = filtered_pos_df[params['pos_sex']].value_counts()['Male']
+    fem_n = filtered_pos_df[params['pos_sex']].value_counts()['Female']
     male_prop = male_n / (male_n + fem_n)
     fem_prop = fem_n / (male_n + fem_n)
 
