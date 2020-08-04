@@ -96,6 +96,20 @@ class Data_Fidelity():
         self.map_file = map_file
         self.img_root = img_root
 
+    @classmethod
+    def last_name_slicer(self, x):
+        try:
+            return re.search(r'^(.*),', x, re.S).group(1)
+        except:
+            return 'Error'
+
+    @classmethod
+    def first_name_slicer(self, x):
+        try:
+            return re.search(r',(\w*).*$', x, re.S).group(1)
+        except:
+            return 'Error'
+
     def collision(self):
         img_map = pd.read_excel(self.map_file)
         img_map = img_map.drop_duplicates() #drop TRUE duplicated rows
@@ -110,8 +124,33 @@ class Data_Fidelity():
         self.img_map = img_map
         self.dups = dups
 
+    def correlate_data(self):
+        img_map = self.img_map
+
+        img_map['sliced_F_PATNAME'] = img_map['PAT_NAME'].map(self.first_name_slicer)
+        img_map['sliced_L_PATNAME'] = img_map['PAT_NAME'].map(self.last_name_slicer)
+
+        img_map_notNA = img_map[img_map['EMPILookup'].notna()]  # not DOB due to dummy DOB
+        bday_filter = img_map_notNA['DOBLookup'] == img_map_notNA['BIRTH_DATE']
+        bday_idx = img_map_notNA[bday_filter].index
+
+        l_name_filter = img_map['sliced_L_PATNAME'] == img_map['PatientLastName']
+        f_name_filter = img_map['sliced_F_PATNAME'] == img_map['PatientFirstName']
+        name_idx = img_map[l_name_filter].index.union(img_map[f_name_filter].index)
+
+        self.bday_idx = bday_idx
+        self.name_idx = name_idx
+
     def check_collision(self, dups_iloc):
-        return self.img_map[self.img_map['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
+        bday_idx = self.bday_idx
+        name_idx = self.name_idx
+
+        name_df = self.img_map.loc[name_idx]
+
+        non_idx_df = self.img_map[self.img_map['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
+        dx_df = name_df[name_df['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
+
+        return non_idx_df, dx_df
 
 def process_img_map(unique_accession_dirs_list, multi_pt_list, single_pt_list, pelvic_fx_df, img_map_df):
 
