@@ -10,6 +10,7 @@ from glob import glob
 
 MAIN_PATH = '../L_spine_images/Images/'
 F_IMG_MAP = './../PHI/DEXA/R3_1750_PT_MAP_FINAL.xlsx'
+R3_REQ = './../PHI/DEXA/R1750.xlsx'
 # PELVIC_FX_DF = pd.read_excel('./old_xlsx/pelvic_final_anon.xlsx') #actual useful 6263 cases
 
 R60_DF = None
@@ -58,13 +59,21 @@ def count_dirs(c_path, del_error_path=False):
     print('study_acc_dirs: ', len(study_acc_dir_list))
     print('unique_study_acc_dirs: ', len(unique_acc_dir_list))
 
-    return study_acc_dir_list, unique_acc_dir_list, multi_pt_list, single_pt_list
+    return study_acc_dir_list, unique_acc_dir_list, multi_pt_list, single_pt_list, all_pt_list
 
-def process_accession_dirs(c_path, return_dups_paths=False): # to look at duplicates
-    study_acc_dir, unique_acc_dir_list, multi_pt_list, single_pt_list = count_dirs(c_path)
+# Different patients with different PATIENT_STUDY_ID may have studies with same ACCESSION_STUDY_ID.
+# Look for Duplicated PAT_ID, should be zero
+# A unique patient may have 2 subdirs with different ACCESSION_STUDY_ID but different study titles
+def process_accession_dirs(c_path, return_dups_paths=False):
+    study_acc_dir, unique_acc_dir_list, multi_pt_list, single_pt_list, all_pt_list = count_dirs(c_path)
 
     study_acc_series = pd.Series(study_acc_dir, name='acc').map(lambda x: int(x))
     study_acc_dir_dups_list = study_acc_series[study_acc_series.duplicated()].tolist()
+
+    pt_series = pd.Series(all_pt_list, name='pts').map(lambda x: int(x))
+    pt_series_dups_list = pt_series[pt_series.duplicated()].tolist()
+
+    print('Acc dups: {}, Pat dups: {}'.format(len(study_acc_dir_dups_list), len(pt_series_dups_list)))
 
     dups_acc_path_list = []
     dups_series_path_list = []
@@ -86,15 +95,17 @@ def process_accession_dirs(c_path, return_dups_paths=False): # to look at duplic
     unique_study_acc_based_on_dirs_list = study_acc_series[~study_acc_series.duplicated()].sort_values().tolist()
 
     if return_dups_paths:
-        return dups_acc_path_list, dups_series_path_list
+        return study_acc_dir_dups_list, dups_acc_path_list, dups_series_path_list, pt_series_dups_list
 
     else:
         return unique_study_acc_based_on_dirs_list, multi_pt_list, single_pt_list
 
+# On patient_MAP, Different patients may have same PATIENT_STUDY_ID and ACCESSION_STUDY_ID.
 class Data_Fidelity():
-    def __init__(self, map_file=F_IMG_MAP, img_root=MAIN_PATH):
+    def __init__(self, map_file=F_IMG_MAP, img_root=MAIN_PATH, r3_req=R3_REQ):
         self.map_file = map_file
         self.img_root = img_root
+        self.r3_req = pd.read_excel(r3_req)
 
     @classmethod
     def last_name_slicer(self, x):
@@ -117,9 +128,12 @@ class Data_Fidelity():
         img_map['PATIENT_STUDY_ID'] = pd.to_numeric(img_map['PATIENT_STUDY_ID'], downcast='integer')
         img_map['ACCESSION_STUDY_ID'] = pd.to_numeric(img_map['ACCESSION_STUDY_ID'], downcast='integer')
 
+        # there should be no duplicates as each study should have unique PATIENT_STUDY_ID and ACCESSION_STUDY_ID
         dups = img_map[img_map.duplicated(subset=['PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID'], keep=False)][['PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID']]
         dups = dups.drop_duplicates().copy() # drop duplicated dups since keep is False
         # dups.to_excel('../PHI/DEXA/R1750_collision_V2.xlsx', index=False)
+
+        #dups are ID-ACC combo, so problem ID's are half of the dups #, as each ID has 2 ACC's with collision
 
         self.img_map = img_map
         self.dups = dups
@@ -141,16 +155,25 @@ class Data_Fidelity():
         self.bday_idx = bday_idx
         self.name_idx = name_idx
 
-    def check_collision(self, dups_iloc):
-        bday_idx = self.bday_idx
-        name_idx = self.name_idx
+        self.name_df = self.img_map.loc[name_idx]
 
-        name_df = self.img_map.loc[name_idx]
+        dups = self.name_df[self.name_df.duplicated(subset=['PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID'], keep=False)]
+        print("Dups for name_df: {}".format(dups.shape[0]))
+
+        name_id_list = self.name_df['new_ID'].tolist()
+        missing_r3_cases = self.r3_req[~self.r3_req['new_ID'].isin(name_id_list)]
+
+        self.missing_r3_cases = missing_r3_cases
+
+    def check_collision(self, dups_iloc):
+
+        name_df = self.name_df
+        # names_df still has ID collision (half of dups), but no ID-ACC combo collision anymore
 
         non_idx_df = self.img_map[self.img_map['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
-        dx_df = name_df[name_df['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
+        idx_df = name_df[name_df['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
 
-        return non_idx_df, dx_df
+        return non_idx_df, idx_df
 
 def process_img_map(unique_accession_dirs_list, multi_pt_list, single_pt_list, pelvic_fx_df, img_map_df):
 
