@@ -18,6 +18,7 @@ PELVIC_FX_DF = None
 
 non_pelvis_list = None
 
+# MAIN_PATH -> patient -> study (acc) -> series (one to many) -> DICOM (one to many)
 def count_dirs(c_path, del_error_path=False):
     dir_count = 0
     multi_pt_list = []
@@ -25,9 +26,14 @@ def count_dirs(c_path, del_error_path=False):
     single_pt_list = []
     study_acc_dir_list = []
     unique_acc_dir_list = []
+    tot_patid_acc_tup_list = []
+    unique_patid_acc_tup_list = []
+    duplicated_patid_acc_tup_list = []
+    dups_acc = []
+    whole_path = []
 
     for pt in os.listdir(c_path):
-        # print(next(os.walk(os.path.join(MAIN_PATH, i)))[1])
+        pt_id = pt.split('_')[1]
         try:
             subdir_path = next(os.walk(os.path.join(c_path, pt)))[1]
         except:
@@ -39,35 +45,50 @@ def count_dirs(c_path, del_error_path=False):
 
         for pt_acc in subdir_path:
             c_acc = re.search(r'_(\d{5,})', pt_acc).group(1)
-            study_acc_dir_list.append(c_acc)
+            whole_path.append([pt, pt_id, pt_acc, c_acc])
 
+            study_acc_dir_list.append(c_acc)
             if c_acc not in unique_acc_dir_list:
                 unique_acc_dir_list.append(c_acc)
+            else:
+                dups_acc.append(c_acc)
+
+            id_acc_tup = (pt_id, c_acc)
+            tot_patid_acc_tup_list.append(id_acc_tup)
+            if id_acc_tup not in unique_patid_acc_tup_list:
+                unique_patid_acc_tup_list.append(id_acc_tup)
+            else:
+                duplicated_patid_acc_tup_list.append(id_acc_tup) #patient with different studies but same accession
 
         subdir_size = len(subdir_path)
         dir_count += subdir_size
-        pt_num = pt.split('_')[1]
-        all_pt_list.append(pt_num)
+        all_pt_list.append(pt_id)
         if subdir_size != 1:
-            multi_pt_list.append(pt_num)
+            multi_pt_list.append(pt_id)
+            # 1. pts with diff studies with same accession (associated/linked studies?)
+            # 2. pts with diff acc due to collision in pt ids (really different patients)
+            # 3. pts with true different studies
         else:
-            single_pt_list.append(pt_num)
+            single_pt_list.append(pt_id)
 
     print('total subdirectories/accessions: ', dir_count)
     print('single subfolder pt: ', len(single_pt_list))
     print('multiple subfolder pt: ', len(multi_pt_list))
     print('study_acc_dirs: ', len(study_acc_dir_list))
     print('unique_study_acc_dirs: ', len(unique_acc_dir_list))
+    print('tot id_acc combos: ', len(tot_patid_acc_tup_list))
+    print('unique id_acc combos: ', len(unique_patid_acc_tup_list))
+    print('dups id_acc combos: ', len(duplicated_patid_acc_tup_list))
 
-    return study_acc_dir_list, unique_acc_dir_list, multi_pt_list, single_pt_list, all_pt_list
+    return study_acc_dir_list, unique_acc_dir_list, all_pt_list, duplicated_patid_acc_tup_list, dups_acc, whole_path
 
 # Different patients with different PATIENT_STUDY_ID may have studies with same ACCESSION_STUDY_ID.
 # Look for Duplicated PAT_ID, should be zero
-# A unique patient may have 2 subdirs with different ACCESSION_STUDY_ID but different study titles
+# A patient may have 2 subdirs with same ACCESSION_STUDY_ID but different study titles
 def process_accession_dirs(c_path, return_dups_paths=False):
-    study_acc_dir, unique_acc_dir_list, multi_pt_list, single_pt_list, all_pt_list = count_dirs(c_path)
+    study_acc_dir_list, unique_acc_dir_list, all_pt_list, duplicated_patid_acc_tup_list, dups_acc = count_dirs(c_path)
 
-    study_acc_series = pd.Series(study_acc_dir, name='acc').map(lambda x: int(x))
+    study_acc_series = pd.Series(study_acc_dir_list, name='acc').map(lambda x: int(x))
     study_acc_dir_dups_list = study_acc_series[study_acc_series.duplicated()].tolist()
 
     pt_series = pd.Series(all_pt_list, name='pts').map(lambda x: int(x))
@@ -98,14 +119,32 @@ def process_accession_dirs(c_path, return_dups_paths=False):
         return study_acc_dir_dups_list, dups_acc_path_list, dups_series_path_list, pt_series_dups_list
 
     else:
-        return unique_study_acc_based_on_dirs_list, multi_pt_list, single_pt_list
+        return study_acc_dir_list
 
 # On patient_MAP, Different patients may have same PATIENT_STUDY_ID and ACCESSION_STUDY_ID.
 class Data_Fidelity():
-    def __init__(self, map_file=F_IMG_MAP, img_root=MAIN_PATH, r3_req=R3_REQ):
+    def __init__(self, map_file=F_IMG_MAP, img_root=MAIN_PATH, r3_req=R3_REQ, params=None):
         self.map_file = map_file
         self.img_root = img_root
-        self.r3_req = pd.read_excel(r3_req)
+        self.orig_req = pd.read_excel(r3_req)
+
+        if params is None:
+            params = {
+                'r3_acc_id': 'ACCESSION_STUDY_ID',
+                'r3_pt_id': 'PATIENT_STUDY_ID',
+                'r3_pt_name': 'PAT_NAME',
+                'r3_dob_lookup': 'DOBLookup',
+                'r3_empi_lookup': 'EMPILookup',
+                'r3_birth_date': 'BIRTH_DATE',
+                'r3_pt_f_name': 'PatientFirstName',
+                'r3_pt_l_name': 'PatientLastName',
+                'r3_acc_num': 'AccessionNumber',
+                'r3_pt_mrn': 'PatientMRN',
+                'orig_acc_num': 'Accession Number',
+                'orig_pt_mrn': 'Patient MRN'
+            }
+
+        self.params = params
 
     @classmethod
     def last_name_slicer(self, x):
@@ -124,12 +163,12 @@ class Data_Fidelity():
     def collision(self):
         img_map = pd.read_excel(self.map_file)
         img_map = img_map.drop_duplicates() #drop TRUE duplicated rows
-        img_map = img_map[img_map['PATIENT_STUDY_ID'].notna() & img_map['ACCESSION_STUDY_ID'].notna()].copy()
-        img_map['PATIENT_STUDY_ID'] = pd.to_numeric(img_map['PATIENT_STUDY_ID'], downcast='integer')
-        img_map['ACCESSION_STUDY_ID'] = pd.to_numeric(img_map['ACCESSION_STUDY_ID'], downcast='integer')
+        img_map = img_map[img_map[self.params['r3_pt_id']].notna() & img_map[self.params['r3_acc_id']].notna()].copy()
+        img_map[self.params['r3_pt_id']] = pd.to_numeric(img_map[self.params['r3_pt_id']], downcast='integer')
+        img_map[self.params['r3_acc_id']] = pd.to_numeric(img_map[self.params['r3_acc_id']], downcast='integer')
 
         # there should be no duplicates as each study should have unique PATIENT_STUDY_ID and ACCESSION_STUDY_ID
-        dups = img_map[img_map.duplicated(subset=['PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID'], keep=False)][['PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID']]
+        dups = img_map[img_map.duplicated(subset=[self.params['r3_pt_id'], self.params['r3_acc_id']], keep=False)][[self.params['r3_pt_id'], self.params['r3_acc_id']]]
         dups = dups.drop_duplicates().copy() # drop duplicated dups since keep is False
         # dups.to_excel('../PHI/DEXA/R1750_collision_V2.xlsx', index=False)
 
@@ -141,15 +180,15 @@ class Data_Fidelity():
     def correlate_data(self):
         img_map = self.img_map
 
-        img_map['sliced_F_PATNAME'] = img_map['PAT_NAME'].map(self.first_name_slicer)
-        img_map['sliced_L_PATNAME'] = img_map['PAT_NAME'].map(self.last_name_slicer)
+        img_map['sliced_F_PATNAME'] = img_map[self.params['r3_pt_name']].map(self.first_name_slicer)
+        img_map['sliced_L_PATNAME'] = img_map[self.params['r3_pt_name']].map(self.last_name_slicer)
 
-        img_map_notNA = img_map[img_map['EMPILookup'].notna()]  # not DOB due to dummy DOB
-        bday_filter = img_map_notNA['DOBLookup'] == img_map_notNA['BIRTH_DATE']
+        img_map_notNA = img_map[img_map[self.params['r3_empi_lookup']].notna()]  # not DOB due to dummy DOB
+        bday_filter = img_map_notNA[self.params['r3_dob_lookup']] == img_map_notNA[self.params['r3_birth_date']]
         bday_idx = img_map_notNA[bday_filter].index
 
-        l_name_filter = img_map['sliced_L_PATNAME'] == img_map['PatientLastName']
-        f_name_filter = img_map['sliced_F_PATNAME'] == img_map['PatientFirstName']
+        l_name_filter = img_map['sliced_L_PATNAME'] == img_map[self.params['r3_pt_l_name']]
+        f_name_filter = img_map['sliced_F_PATNAME'] == img_map[self.params['r3_pt_f_name']]
         name_idx = img_map[l_name_filter].index.union(img_map[f_name_filter].index)
 
         self.bday_idx = bday_idx
@@ -157,61 +196,57 @@ class Data_Fidelity():
 
         self.name_df = self.img_map.loc[name_idx]
 
-        dups = self.name_df[self.name_df.duplicated(subset=['PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID'], keep=False)]
+        dups = self.name_df[self.name_df.duplicated(subset=[self.params['r3_pt_id'], self.params['r3_acc_id']], keep=False)]
         print("Dups for name_df: {}".format(dups.shape[0]))
 
-        name_id_list = self.name_df['new_ID'].tolist()
-        missing_r3_cases = self.r3_req[~self.r3_req['new_ID'].isin(name_id_list)]
-
-        self.missing_r3_cases = missing_r3_cases
+        outer_orig_vs_namedf = self.orig_req.merge(self.name_df, left_on=[self.params['orig_pt_mrn'], self.params['orig_acc_num']], right_on=[self.params['r3_pt_mrn'], self.params['r3_acc_num']], how='outer')
+        missing_orig_req = outer_orig_vs_namedf[~outer_orig_vs_namedf[self.params['r3_pt_id']].notna()]
+        self.missing_orig_req = missing_orig_req
 
     def check_collision(self, dups_iloc):
 
         name_df = self.name_df
         # names_df still has ID collision (half of dups), but no ID-ACC combo collision anymore
 
-        non_idx_df = self.img_map[self.img_map['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
-        idx_df = name_df[name_df['PATIENT_STUDY_ID'] == self.dups.iloc[dups_iloc]['PATIENT_STUDY_ID']]
+        non_idx_df = self.img_map[self.img_map[self.params['r3_pt_id']] == self.dups.iloc[dups_iloc][self.params['r3_pt_id']]]
+        idx_df = name_df[name_df[self.params['r3_pt_id']] == self.dups.iloc[dups_iloc][self.params['r3_pt_id']]]
 
         return non_idx_df, idx_df
 
-def process_img_map(unique_accession_dirs_list, multi_pt_list, single_pt_list, pelvic_fx_df, img_map_df):
+    def process_img_map(self, unique_accession_dirs_list, multi_pt_list, single_pt_list, pelvic_fx_df):
 
-    img_map_copy = img_map_df.copy()
-    filled_img_map = img_map_copy.fillna(999)
+        img_map = self.name_df.copy()
 
-    filled_img_map[['PT_STUDY_ID', 'ACCESSION_STUDY_ID', 'SERIES_NUMBER_DICOM']] = \
-        filled_img_map[['PT_STUDY_ID', 'ACCESSION_STUDY_ID', 'SERIES_NUMBER_DICOM']].applymap(lambda x: int(x))
-    filled_img_map['has_dir'] = filled_img_map['ACCESSION_STUDY_ID']\
-        .isin(unique_accession_dirs_list)  # correlating the db to the dirs, showing missing 48 cases with undefined values.
+        img_map[[self.params['r3_pt_id'], self.params['r3_acc_id']]] = img_map[[self.params['r3_pt_id'], self.params['r3_acc_id']]].applymap(lambda x: int(x))
+        img_map['has_dir'] = img_map[self.params['r3_acc_id']].isin(unique_accession_dirs_list)  # correlating the db to the dirs, showing missing 48 cases with undefined values.
 
-    img_map_nan = filled_img_map[filled_img_map["ACCESSION_STUDY_ID"] == 999]
-    non_dup_img_map = filled_img_map[~filled_img_map['Accession Number'].duplicated()]  # equal to 7677 cases, same as R60.  48 have undefined ACCESSION_STUDY_ID.
+        img_map_nan = img_map[img_map[self.params['r3_acc_id']] == 999]
+        non_dup_img_map = img_map[~img_map[self.params['r3_acc_num']].duplicated()]  # equal to 7677 cases, same as R60.  48 have undefined ACCESSION_STUDY_ID.
 
-    img_map_valid = filled_img_map[filled_img_map['ACCESSION_STUDY_ID'] != 999].copy()
-    valid_non_dups_imgs = img_map_valid[~img_map_valid['Accession Number'].duplicated()]  # 7629 cases, excluded 48 with undefined ACCESSION_STUDY_ID.
-    img_map_unique_acc_list = valid_non_dups_imgs['Accession Number'].nunique()
+        img_map_valid = img_map[img_map[self.params['r3_acc_id']] != 999].copy()
+        valid_non_dups_imgs = img_map_valid[~img_map_valid[self.params['r3_acc_num']].duplicated()]  # 7629 cases, excluded 48 with undefined ACCESSION_STUDY_ID.
+        img_map_unique_acc_list = valid_non_dups_imgs[self.params['r3_acc_num']].nunique()
 
-    valid_multi_pt = valid_non_dups_imgs[valid_non_dups_imgs['PT_STUDY_ID'].isin(multi_pt_list)] # pts with multiple accessions
-    unique_valid_mult_pt = valid_multi_pt[~valid_multi_pt['PT_STUDY_ID'].duplicated()]
-    valid_single_pt = valid_non_dups_imgs[valid_non_dups_imgs['PT_STUDY_ID'].isin(single_pt_list)]
+        valid_multi_pt = valid_non_dups_imgs[valid_non_dups_imgs[self.params['r3_pt_id']].isin(multi_pt_list)] # pts with multiple accessions
+        unique_valid_mult_pt = valid_multi_pt[~valid_multi_pt[self.params['r3_pt_id']].duplicated()]
+        valid_single_pt = valid_non_dups_imgs[valid_non_dups_imgs[self.params['r3_pt_id']].isin(single_pt_list)]
 
-    pelvic_fx_df_copy = pelvic_fx_df.copy()
+        pelvic_fx_df_copy = pelvic_fx_df.copy()
 
-    joined_df = non_dup_img_map.join(pelvic_fx_df_copy.set_index('Accession Number'), on='Accession Number', lsuffix='_img', rsuffix='_fx').fillna(999)
-    joined_df[['ID_fx', 'consold_label', 'sep_label']] = joined_df[['ID_fx', 'consold_label', 'sep_label']].applymap(lambda x: int(x))
-    joined_df = joined_df.rename(columns={'ID_img': 'ID'}).drop(columns=['ID_fx', 'STUDY_DATE_DICOM'])
+        joined_df = non_dup_img_map.join(pelvic_fx_df_copy.set_index('Accession Number'), on='Accession Number', lsuffix='_img', rsuffix='_fx').fillna(999)
+        joined_df[['ID_fx', 'consold_label', 'sep_label']] = joined_df[['ID_fx', 'consold_label', 'sep_label']].applymap(lambda x: int(x))
+        joined_df = joined_df.rename(columns={'ID_img': 'ID'}).drop(columns=['ID_fx', 'STUDY_DATE_DICOM'])
 
-    joined_df['valid_map'] = joined_df['Accession Number'].isin(valid_non_dups_imgs['Accession Number'].tolist())  # is the required image valid/exist
-    joined_df['valid_map'] = joined_df['valid_map'].map(lambda x: bool(x))
+        joined_df['valid_map'] = joined_df['Accession Number'].isin(valid_non_dups_imgs['Accession Number'].tolist())  # is the required image valid/exist
+        joined_df['valid_map'] = joined_df['valid_map'].map(lambda x: bool(x))
 
-    return joined_df
+        return joined_df
 
-def get_final_df():
-    unique_acc_dirs_list, multi_pt_list, single_pt_list = process_accession_dirs()
-    final_df = process_img_map(unique_acc_dirs_list, multi_pt_list, single_pt_list, PELVIC_FX_DF)
+    def get_final_df(self):
+        unique_acc_dirs_list, multi_pt_list, single_pt_list = process_accession_dirs()
+        final_df = self.process_img_map(unique_acc_dirs_list, multi_pt_list, single_pt_list, PELVIC_FX_DF)
 
-    return final_df
+        return final_df
 
 def consolidate_dup_acc_dirs(modify_files=False):
     dups_acc, dups_series = process_accession_dirs(c_path=MAIN_PATH, return_dups_paths=True)
@@ -247,7 +282,8 @@ def consolidate_dup_acc_dirs(modify_files=False):
             shutil.rmtree(i)
 
 def place_SB_files(modify_files=False, del_error_files=False, save_excel=False, output_txt=False):
-    final_df = get_final_df()
+    # final_df = get_final_df()
+    final_df = pd.DataFrame()
 
     valid_df = final_df[final_df['valid_map']]
     study_ids = valid_df['PT_STUDY_ID']
