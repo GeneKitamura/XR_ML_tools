@@ -15,10 +15,12 @@ R3_REQ = './../PHI/DEXA/R1750.xlsx'
 
 R60_DF = None
 PELVIC_FX_DF = None
-
 non_pelvis_list = None
 
 # MAIN_PATH -> patient -> study (acc) -> series (one to many) -> DICOM (one to many)
+# Different patients with different PATIENT_STUDY_ID may have studies with same ACCESSION_STUDY_ID.
+# Look for Duplicated PAT_ID
+# A patient may have 2 subdirs with same ACCESSION_STUDY_ID but different study titles
 def count_dirs(c_path, del_error_path=False):
     dir_count = 0
     multi_pt_list = []
@@ -44,16 +46,17 @@ def count_dirs(c_path, del_error_path=False):
             continue
 
         for pt_acc in subdir_path:
-            c_acc = re.search(r'_(\d{5,})', pt_acc).group(1)
-            whole_path.append([pt, pt_id, pt_acc, c_acc])
-
-            study_acc_dir_list.append(c_acc)
-            if c_acc not in unique_acc_dir_list:
-                unique_acc_dir_list.append(c_acc)
+            acc_num = re.search(r'_(\d{5,})', pt_acc).group(1)
+            study_acc_dir_list.append(acc_num)
+            if acc_num not in unique_acc_dir_list:
+                unique_acc_dir_list.append(acc_num)
             else:
-                dups_acc.append(c_acc)
+                dups_acc.append(acc_num)
 
-            id_acc_tup = (pt_id, c_acc)
+            pt_id = int(pt_id)
+            acc_num = int(acc_num)
+            id_acc_tup = (pt_id, acc_num)
+            whole_path.append([pt, pt_id, pt_acc, acc_num, id_acc_tup])
             tot_patid_acc_tup_list.append(id_acc_tup)
             if id_acc_tup not in unique_patid_acc_tup_list:
                 unique_patid_acc_tup_list.append(id_acc_tup)
@@ -67,9 +70,24 @@ def count_dirs(c_path, del_error_path=False):
             multi_pt_list.append(pt_id)
             # 1. pts with diff studies with same accession (associated/linked studies?)
             # 2. pts with diff acc due to collision in pt ids (really different patients)
-            # 3. pts with true different studies
+            # 3. pts with true different studies (more than one study requested per patient)
         else:
             single_pt_list.append(pt_id)
+
+
+    df_based_on_files = pd.DataFrame(whole_path, columns=['pat_path', 'pat_id', 'acc_path', 'acc_num', 'id_acc_tup'])
+
+    dups_acc_series = pd.Series(dups_acc)
+
+    diff_pt_same_acc = dups_acc_series[~dups_acc_series.isin([tup[1] for tup in duplicated_patid_acc_tup_list])]
+    same_pt_same_acc = dups_acc_series[dups_acc_series.isin([tup[1] for tup in duplicated_patid_acc_tup_list])]
+
+    diff_pt_same_acc_df = df_based_on_files[df_based_on_files['acc_num'].isin(diff_pt_same_acc)]
+    same_pt_and_acc_df = df_based_on_files[df_based_on_files['acc_num'].isin(same_pt_same_acc)]
+
+    pt_series = pd.Series(all_pt_list, name='pts').map(lambda x: int(x))
+    pt_series_dups_list = pt_series[pt_series.duplicated()].tolist()
+    print('Acc dups: {}, Pat dups: {}'.format(len(dups_acc_series), len(pt_series_dups_list)))
 
     print('total subdirectories/accessions: ', dir_count)
     print('single subfolder pt: ', len(single_pt_list))
@@ -79,47 +97,10 @@ def count_dirs(c_path, del_error_path=False):
     print('tot id_acc combos: ', len(tot_patid_acc_tup_list))
     print('unique id_acc combos: ', len(unique_patid_acc_tup_list))
     print('dups id_acc combos: ', len(duplicated_patid_acc_tup_list))
+    print('diff_pt_same_acc_#: ', len(diff_pt_same_acc))
+    print('same_pt_same_acc_#: ', len(same_pt_same_acc))
 
-    return study_acc_dir_list, unique_acc_dir_list, all_pt_list, duplicated_patid_acc_tup_list, dups_acc, whole_path
-
-# Different patients with different PATIENT_STUDY_ID may have studies with same ACCESSION_STUDY_ID.
-# Look for Duplicated PAT_ID, should be zero
-# A patient may have 2 subdirs with same ACCESSION_STUDY_ID but different study titles
-def process_accession_dirs(c_path, return_dups_paths=False):
-    study_acc_dir_list, unique_acc_dir_list, all_pt_list, duplicated_patid_acc_tup_list, dups_acc = count_dirs(c_path)
-
-    study_acc_series = pd.Series(study_acc_dir_list, name='acc').map(lambda x: int(x))
-    study_acc_dir_dups_list = study_acc_series[study_acc_series.duplicated()].tolist()
-
-    pt_series = pd.Series(all_pt_list, name='pts').map(lambda x: int(x))
-    pt_series_dups_list = pt_series[pt_series.duplicated()].tolist()
-
-    print('Acc dups: {}, Pat dups: {}'.format(len(study_acc_dir_dups_list), len(pt_series_dups_list)))
-
-    dups_acc_path_list = []
-    dups_series_path_list = []
-
-    for pt in os.listdir(c_path):
-        acc_path = next(os.walk(os.path.join(c_path, pt)))[1]
-        for pt_acc in acc_path:
-            acc_num = int(re.search(r'_(\d{5,})', pt_acc).group(1))
-
-            if acc_num in study_acc_dir_dups_list:
-                dups_acc_path_list.append(os.path.join(c_path, pt, pt_acc))
-
-    for acc in dups_acc_path_list:
-        dups_series = next(os.walk(acc))[1]
-
-        for pt_series in dups_series:
-            dups_series_path_list.append(os.path.join(acc, pt_series))
-
-    unique_study_acc_based_on_dirs_list = study_acc_series[~study_acc_series.duplicated()].sort_values().tolist()
-
-    if return_dups_paths:
-        return study_acc_dir_dups_list, dups_acc_path_list, dups_series_path_list, pt_series_dups_list
-
-    else:
-        return study_acc_dir_list
+    return df_based_on_files
 
 # On patient_MAP, Different patients may have same PATIENT_STUDY_ID and ACCESSION_STUDY_ID.
 class Data_Fidelity():
@@ -146,19 +127,22 @@ class Data_Fidelity():
 
         self.params = params
 
-    @classmethod
     def last_name_slicer(self, x):
         try:
             return re.search(r'^(.*),', x, re.S).group(1)
         except:
             return 'Error'
 
-    @classmethod
     def first_name_slicer(self, x):
         try:
             return re.search(r',(\w*).*$', x, re.S).group(1)
         except:
             return 'Error'
+
+    def acc_id_tup(self, row):
+        acc = row[self.params['r3_acc_id']]
+        pt_id = row[self.params['r3_pt_id']]
+        return (pt_id, acc)
 
     def collision(self):
         img_map = pd.read_excel(self.map_file)
@@ -180,6 +164,7 @@ class Data_Fidelity():
     def correlate_data(self):
         img_map = self.img_map
 
+        img_map['id_acc_tup'] = img_map.apply(self.acc_id_tup, axis=1)
         img_map['sliced_F_PATNAME'] = img_map[self.params['r3_pt_name']].map(self.first_name_slicer)
         img_map['sliced_L_PATNAME'] = img_map[self.params['r3_pt_name']].map(self.last_name_slicer)
 
@@ -196,8 +181,8 @@ class Data_Fidelity():
 
         self.name_df = self.img_map.loc[name_idx]
 
-        dups = self.name_df[self.name_df.duplicated(subset=[self.params['r3_pt_id'], self.params['r3_acc_id']], keep=False)]
-        print("Dups for name_df: {}".format(dups.shape[0]))
+        c_dups = self.name_df[self.name_df.duplicated(subset=[self.params['r3_pt_id'], self.params['r3_acc_id']], keep=False)]
+        print("id-acc subset sups for name_df: {}".format(c_dups.shape[0]))
 
         outer_orig_vs_namedf = self.orig_req.merge(self.name_df, left_on=[self.params['orig_pt_mrn'], self.params['orig_acc_num']], right_on=[self.params['r3_pt_mrn'], self.params['r3_acc_num']], how='outer')
         missing_orig_req = outer_orig_vs_namedf[~outer_orig_vs_namedf[self.params['r3_pt_id']].notna()]
@@ -243,13 +228,13 @@ class Data_Fidelity():
         return joined_df
 
     def get_final_df(self):
-        unique_acc_dirs_list, multi_pt_list, single_pt_list = process_accession_dirs()
+        unique_acc_dirs_list, multi_pt_list, single_pt_list = count_dirs()
         final_df = self.process_img_map(unique_acc_dirs_list, multi_pt_list, single_pt_list, PELVIC_FX_DF)
 
         return final_df
 
 def consolidate_dup_acc_dirs(modify_files=False):
-    dups_acc, dups_series = process_accession_dirs(c_path=MAIN_PATH, return_dups_paths=True)
+    dups_acc, dups_series = count_dirs(c_path=MAIN_PATH)
 
     study_ids_list = []
     prev_acc = './previous_accession'
