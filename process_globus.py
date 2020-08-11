@@ -277,7 +277,7 @@ class Data_Fidelity():
 
         return non_idx_df, idx_df
 
-    def process_img_map(self):
+    def process_img_map(self, save=False):
         df_based_on_files = count_dirs(self.img_root)
         dir_and_map_merged_df = df_based_on_files.merge(self.name_df, on=['id_acc_tup'])
 
@@ -301,6 +301,16 @@ class Data_Fidelity():
 
         valid_dir_map_merged = dir_and_map_merged_df[dir_and_map_merged_df['id_acc_tup'].isin(full_path_map_merged['id_acc_tup'].unique())].copy()
         self.valid_dir_map_merged = valid_dir_map_merged
+
+        if save:
+            full_path_map_merged.to_excel('../PHI/DEXA/full_path_map_merged.xlsx', index_label='index')
+            valid_dir_map_merged.to_excel('../PHI/DEXA/valid_dir_map_merged.xlsx', index_label='index')
+
+        short_full_merged = full_path_map_merged[['new_ID', 'PATIENT_STUDY_ID', 'ACCESSION_STUDY_ID',
+                                                  'PatientFirstName', 'PatientLastName', 'full_path',
+                                                  'ScheduledDate', 'Patient Age', 'Patient Sex']].copy()
+
+        self.short_full_merged = short_full_merged
 
 def check_dicom_files():
     # Cannot return from functions using concurrent module, so run on Jupyter
@@ -337,7 +347,7 @@ def create_dicom_images():
     conv_to_uint8=False
     stack=False
     img_root=IMG_ROOT
-    np_save_file = './images_files'
+    np_save_file = './2000_images_files'
 
     def img_creater(idx, row):
         dicom_path = os.path.join(img_root, row['full_path'])
@@ -383,11 +393,11 @@ def create_dicom_images():
         index_array.append(c_output[1])
         image_array.append(c_output[2])
 
-    index_array = np.array(index_array)
     image_array = np.array(image_array)
+    index_array = np.array(index_array)
     flag_array = np.array(flag_array)
 
-    np.savez(np_save_file, image_array=image_array, index_array=index_array, flag_array=flag_array)
+    # np.savez(np_save_file, image_array=image_array, index_array=index_array, flag_array=flag_array)
 
     # Cannot return from functions using concurrent module, so run on Jupyter
 
