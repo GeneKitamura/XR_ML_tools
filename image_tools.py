@@ -47,6 +47,8 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
         h_slot = int(math.ceil(np.sqrt(img_n)))
     if w_slot is None:
         w_slot = int(math.ceil(np.sqrt(img_n)))
+    if (h_slot == 1) & (w_slot == 1):
+        w_slot=2 # if only 1 img
 
     fig, axes = plt.subplots(h_slot, w_slot, figsize=(width, height))
     fig.subplots_adjust(hspace=0.1, wspace=0)
@@ -90,6 +92,9 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
             ax.set_title(c_title, color='red')
 
         ax.axis('off')
+
+        if img_n == 1: # if only 1 image
+            break
 
     if colorbar:
         fig.colorbar(plot_heat_map)

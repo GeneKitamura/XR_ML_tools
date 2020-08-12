@@ -373,7 +373,7 @@ def create_dicom_images():
         if dcm.PhotometricInterpretation == 'MONOCHROME1':
             _img = cv2.bitwise_not(_img)
 
-        _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True)  # img_as_float
+        _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True, preserve_range=True)  # img_as_float
 
         if stack:
             _img = np.stack([_img, _img, _img], axis=-1)
@@ -387,6 +387,7 @@ def create_dicom_images():
     image_array = []
     flag_array = []
 
+    # return order is random
     for r in as_completed(futures, timeout=10):
         c_output = r.result()
         flag_array.append(c_output[0])
