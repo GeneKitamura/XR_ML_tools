@@ -311,6 +311,7 @@ class Data_Fidelity():
                                                   'ScheduledDate', 'Patient Age', 'Patient Sex']].copy()
 
         self.short_full_merged = short_full_merged
+        short_full_merged.to_excel('../PHI/DEXA/short_full_merged.xlsx', index_label='index')
 
 def check_dicom_files():
     # Cannot return from functions using concurrent module, so run on Jupyter
@@ -345,9 +346,10 @@ def create_dicom_images():
     c_df = None
     output_size=238
     conv_to_uint8=False
+    conv_to_uint16=False
     stack=False
     img_root=IMG_ROOT
-    np_save_file = './2000_images_files'
+    np_save_file = './224_0to1495'
 
     def img_creater(idx, row):
         dicom_path = os.path.join(img_root, row['full_path'])
@@ -367,13 +369,17 @@ def create_dicom_images():
         except ValueError: # odd number pixel
             pass
 
-        if conv_to_uint8:
-            _img = skimage.img_as_uint(_img)
 
         if dcm.PhotometricInterpretation == 'MONOCHROME1':
             _img = cv2.bitwise_not(_img)
 
-        _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True, preserve_range=True)  # img_as_float
+        _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True)  # img_as_float
+
+        if conv_to_uint16:
+            _img = skimage.img_as_uint(_img)
+
+        if conv_to_uint8:
+            _img = skimage.img_as_ubyte(_img)
 
         if stack:
             _img = np.stack([_img, _img, _img], axis=-1)
@@ -383,22 +389,25 @@ def create_dicom_images():
     with ProcessPoolExecutor() as executor:
         futures = {executor.submit(img_creater, idx, row) for idx, row in c_df.iterrows()}
 
-    index_array = []
-    image_array = []
-    flag_array = []
+    index_list = []
+    image_list = []
+    flag_list = []
 
     # return order is random
     for r in as_completed(futures, timeout=10):
         c_output = r.result()
-        flag_array.append(c_output[0])
-        index_array.append(c_output[1])
-        image_array.append(c_output[2])
-
-    image_array = np.array(image_array)
-    index_array = np.array(index_array)
-    flag_array = np.array(flag_array)
-
-    # np.savez(np_save_file, image_array=image_array, index_array=index_array, flag_array=flag_array)
+        flag_list.append(c_output[0])
+        index_list.append(c_output[1])
+        image_list.append(c_output[2])
 
     # Cannot return from functions using concurrent module, so run on Jupyter
+    # do this part after above code is done.
+    sorted_index, sorted_images, sorted_flags  = zip(*sorted(zip(index_list, image_list, flag_list), key=lambda pair: pair[0]))
+    sorted_index = np.array(sorted_index)
+    sorted_images = np.array(sorted_images)
+    sorted_flags = np.array(sorted_flags)
+
+    np.savez(np_save_file, image_array=sorted_images, index_array=sorted_index, flag_array=sorted_flags)
+
+
 

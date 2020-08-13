@@ -1,11 +1,4 @@
 import pandas as pd
-import re
-import numpy as np
-import importlib
-import random
-import os
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import math
 import tensorflow as tf
 import time
@@ -14,29 +7,29 @@ import sys
 sys.path.append('..')
 
 from tensorflow import keras
-from random import shuffle
-from copy import deepcopy
-from skimage import io, transform
-from glob import glob
-from sklearn import metrics
-
-from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam, SGD
-from tensorflow.keras.utils import Progbar
-from tensorflow.keras.metrics import SparseCategoricalAccuracy
+from tensorflow.keras.optimizers import Adam
 
-import XR_ML_tools.parse_excel as parse_excel
-import XR_ML_tools.utils as utils
-
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-
-def split_train_val_df(labels_df):
+def split_train_val_df(labels_df, label_types=None, train_split=0.8):
     # labels_df with meaningful index to link back to whole df
-    labels = pd.read_excel(labels_df, index_col=0)
 
-def load_densenet(n_class=3):
-    base_model = keras.applications.densenet.DenseNet121(include_top=False, input_shape=(224, 224, 3), pooling='avg',  weights='imagenet')
+    train_idx = {}
+    if label_types is None:
+        label_types = ['pos_label', 'hard_label']
+
+    for label_type in label_types:
+        train_idx[label_type] = []
+        for label in labels_df[label_type].unique():
+            c_df = labels_df[labels_df[label_type] == label]
+            tn = int(c_df.shape[0] * train_split)
+            tidx = c_df.sample(tn).index.tolist()
+            train_idx[label_type] = train_idx[label_type] + tidx
+        train_idx[label_type] = sorted(train_idx[label_type])
+
+    return train_idx
+
+def load_densenet(input_size=224, n_class=3):
+    base_model = keras.applications.densenet.DenseNet121(include_top=False, input_shape=(input_size, input_size, 3), pooling='avg',  weights='imagenet')
     x = base_model.output  # (None, 1024)
     x = keras.layers.Dropout(0.5)(x)
     # x = keras.layers.Dense(n_class, activation='softmax', kernel_regularizer=keras.regularizers.l2())(x)
@@ -59,6 +52,7 @@ def preprocess_densenet(img, label):
     return new_img, label
 
 def position_augment(img, label, preprocess_fxn=preprocess_densenet):
+    # data should be in uint8 or uint16 for brightness/contrast
     img = tf.image.random_brightness(img, 0.5)
     img = tf.image.random_contrast(img, 0.5, 1.5)
     img = tf.image.random_crop(img, (224, 224, 3))
@@ -72,15 +66,19 @@ def augment_map(*datapoint):
 
     return img, label
 
-def train_numpy_keras(batch_size=20, epochs=20, save_path=None, excel_path=None):
-    train_ds, n_train, val_ds, n_val = load_TFR_ds()
+def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, excel_path=None):
+    AUTOTUNE = tf.data.experimental.AUTOTUNE
+
+    train_ds, n_train, val_ds, n_val = get_numpy_ds
+    train_steps = math.ceil(n_train/batch_size)
+    val_steps = math.ceil(n_val/batch_size)
 
     # to see items
     # iter_ds = iter(train_ds)
     # one_item = next(iter_ds)
 
     #shuffle MUST be after cache, otherwise data is always fed in the same way
-    train_ds = train_ds.cache().map(augment_map).shuffle(buffer_size=500).batch(batch_size).repeat().prefetch(AUTOTUNE)
+    train_ds = train_ds.cache().map(augment_map).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
     # no need to repeat val_ds; it will run from top every time.
     val_ds = val_ds.cache().batch(batch_size).prefetch(AUTOTUNE)
 
@@ -98,7 +96,7 @@ def train_numpy_keras(batch_size=20, epochs=20, save_path=None, excel_path=None)
     ]
 
     train_start = time.time()
-    history = model.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=callbacks, steps_per_epoch=25, validation_steps=11)
+    history = model.fit(train_ds, epochs=epochs, validation_data=val_ds, callbacks=callbacks, steps_per_epoch=train_steps, validation_steps=val_steps)
 
     print('total time {:.2f}'.format(time.time() - train_start), 3)
 
