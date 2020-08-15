@@ -3,6 +3,13 @@ import math
 import tensorflow as tf
 import time
 import sys
+import numpy as np
+import re
+import os
+
+from skimage import io
+from glob import glob
+from sklearn import metrics
 
 sys.path.append('..')
 
@@ -51,6 +58,10 @@ def preprocess_densenet(img, label):
 
     return new_img, label
 
+def trunc_name(*datapoint):
+    img, label, name = datapoint
+    return img, label
+
 def position_augment(img, label, preprocess_fxn=preprocess_densenet):
     # data should be in uint8 or uint16 for brightness/contrast
     img = tf.image.random_brightness(img, 0.5)
@@ -69,9 +80,11 @@ def augment_map(*datapoint):
 def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, excel_path=None):
     AUTOTUNE = tf.data.experimental.AUTOTUNE
 
-    train_ds, n_train, val_ds, n_val = get_numpy_ds
+    train_ds, n_train, val_ds, n_val, n_labels = get_numpy_ds
     train_steps = math.ceil(n_train/batch_size)
     val_steps = math.ceil(n_val/batch_size)
+    train_ds = train_ds.map(trunc_name) #get rid of name/idx
+    val_ds = val_ds.map(trunc_name) #get rid of name/idx
 
     # to see items
     # iter_ds = iter(train_ds)
@@ -80,9 +93,9 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, ex
     #shuffle MUST be after cache, otherwise data is always fed in the same way
     train_ds = train_ds.cache().map(augment_map).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
     # no need to repeat val_ds; it will run from top every time.
-    val_ds = val_ds.cache().batch(batch_size).prefetch(AUTOTUNE)
+    val_ds = val_ds.cache().map(preprocess_densenet).batch(batch_size).prefetch(AUTOTUNE)
 
-    model = load_densenet()
+    model = load_densenet(n_class=n_labels)
 
     optimizer = Adam(lr=1e-4)
     loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
@@ -91,7 +104,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, ex
 
     callbacks = [
         tf.keras.callbacks.ReduceLROnPlateau(factor=0.2, patience=5, min_lr=1e-6, min_delta=1e-3),
-        tf.keras.callbacks.EarlyStopping(patience=10, min_delta=1e-3),
+        tf.keras.callbacks.EarlyStopping(patience=15, min_delta=1e-3),
         tf.keras.callbacks.ModelCheckpoint(filepath=save_path, save_best_only=True, save_weights_only=True)
     ]
 
@@ -103,4 +116,31 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, ex
     c_df = pd.DataFrame()
     for key, val in history.history.items():
         c_df[key] = val
-    c_df.to_excel(excel_path)
+    c_df.to_excel(excel_path, index=False)
+
+def eval_trained_model(get_numpy_ds, model_weights):
+    _, _, val_ds, n_val, n_labels = get_numpy_ds
+
+    model = load_densenet(n_class=n_labels)
+    model.load_weights(model_weights)
+
+    total_inp_data = next(iter(val_ds.batch(n_val)))
+    processed_val = preprocess_densenet(total_inp_data[0], total_inp_data[1])
+    predictions = model.predict(processed_val)
+    pred_labels = np.argmax(predictions, axis=1)
+    true_labels = total_inp_data[1].numpy()
+    disc_bool = pred_labels != true_labels
+
+    disc_imgs = total_inp_data[0].numpy()[disc_bool]
+    incorrect_names = total_inp_data[2].numpy()[disc_bool]
+    incorrect_labels = pred_labels[disc_bool]
+    correct_labels = true_labels[disc_bool]
+
+    for label in range(n_labels):
+        fpr, tpr, _ = metrics.roc_curve(y_score=predictions[:, label], y_true=true_labels, pos_label=label)
+        auc = metrics.auc(fpr, tpr)
+        print('auc for {} is {}'.format(label, auc))
+
+    print(metrics.classification_report(y_true=true_labels, y_pred=pred_labels))
+
+    # tile_alt_imshow(disc_imgs, titles=list(zip(correct_labels, incorrect_labels, incorrect_names)))
