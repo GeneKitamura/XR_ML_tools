@@ -13,6 +13,8 @@ from collections import defaultdict
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
+from .image_tools import save_img_as_jpg
+
 from glob import glob
 
 IMG_ROOT = '../L_spine_images/Images/'
@@ -351,7 +353,7 @@ def create_dicom_images():
     img_root=IMG_ROOT
     np_save_file = './224_0to1495'
 
-    def img_creater(idx, row):
+    def img_creater(idx, row, resize, return_imgs=True, save_orig_dir=None):
         dicom_path = os.path.join(img_root, row['full_path'])
         dcm = pydicom.dcmread(dicom_path)
 
@@ -373,7 +375,12 @@ def create_dicom_images():
         if dcm.PhotometricInterpretation == 'MONOCHROME1':
             _img = cv2.bitwise_not(_img)
 
-        _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True)  # img_as_float
+        if save_orig_dir is not None:
+            c_name = save_orig_dir + str(idx)
+            save_img_as_jpg(_img, c_name)
+
+        if resize:
+            _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True)  # img_as_float
 
         if conv_to_uint16:
             _img = skimage.img_as_uint(_img)
@@ -384,10 +391,13 @@ def create_dicom_images():
         if stack:
             _img = np.stack([_img, _img, _img], axis=-1)
 
-        return 1, idx, _img
+        if return_imgs:
+            return 1, idx, _img
+        else:
+            return 1, idx, 1
 
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(img_creater, idx, row) for idx, row in c_df.iterrows()}
+        futures = {executor.submit(img_creater, idx, row, return_imgs=True) for idx, row in c_df.iterrows()}
 
     index_list = []
     image_list = []

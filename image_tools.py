@@ -139,3 +139,22 @@ def rescale_img(img, new_min=0, new_max=1):
     # not perfect since old min and old max based on curr img, and not on whole dataset
     # works WELL when used on array of images
     return (img - np.min(img)) * (new_max - new_min) / (np.max(img) - np.min(img)) + new_min
+
+
+def save_img_as_jpg(_img, c_name):
+    _img = exposure.equalize_hist(_img)
+    if len(_img.shape) == 2:
+        h, w = _img.shape
+    else:
+        h, w, _ = _img.shape
+    fig_h = h / 1000
+    fig_w = w / 1000
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(fig_w, fig_h)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    ax.imshow(_img, aspect='auto', cmap='gray')
+    fig.savefig(c_name, dpi=1000, format='jpeg')
+    plt.close(fig)
+
