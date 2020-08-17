@@ -353,7 +353,7 @@ def create_dicom_images():
     img_root=IMG_ROOT
     np_save_file = './224_0to1495'
 
-    def img_creater(idx, row, resize, return_imgs=True, save_orig_dir=None):
+    def img_creater(idx, row, resize, flip=False, save_orig_dir=None, return_imgs=True):
         dicom_path = os.path.join(img_root, row['full_path'])
         dcm = pydicom.dcmread(dicom_path)
 
@@ -368,12 +368,14 @@ def create_dicom_images():
 
         try:
             _img = exposure.rescale_intensity(_img, in_range=('uint' + str(bs)))
-        except ValueError: # odd number pixel
+        except ValueError:  # odd number pixel
             pass
-
 
         if dcm.PhotometricInterpretation == 'MONOCHROME1':
             _img = cv2.bitwise_not(_img)
+
+        if flip:
+            _img = np.fliplr(_img)
 
         if save_orig_dir is not None:
             c_name = save_orig_dir + str(idx)
