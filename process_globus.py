@@ -288,7 +288,7 @@ class Data_Fidelity():
         print('unique id-acc tup combo for final merged df', dir_and_map_merged_df['id_acc_tup'].nunique())
         print('final missing count from orig vs final df: ', missing_orig_vs_merged_df.shape[0])
 
-        NA_id_df = dir_and_map_merged_df[~dir_and_map_merged_df['PATIENT_STUDY_ID'].notna()]
+        NA_id_df = dir_and_map_merged_df[~dir_and_map_merged_df[self.params['r3_pt_id']].notna()]
         print('Patient ID for final_merged_df is NA: {}'.format(NA_id_df.shape))
 
         self.missing_orig_vs_merged_df = missing_orig_vs_merged_df

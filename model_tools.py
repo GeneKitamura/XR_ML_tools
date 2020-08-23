@@ -1,6 +1,7 @@
 import pandas as pd
 import math
 import tensorflow as tf
+import tensorflow_addons as tfa
 import time
 import sys
 import numpy as np
@@ -16,6 +17,7 @@ sys.path.append('..')
 from tensorflow import keras
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+
 
 def split_train_val_df(labels_df, label_types=None, train_split=0.8):
     # labels_df with meaningful index to link back to whole df
@@ -35,12 +37,11 @@ def split_train_val_df(labels_df, label_types=None, train_split=0.8):
 
     return train_idx
 
-def load_densenet(input_size=224, n_class=3):
+def load_densenet(input_size=224, n_class=3, activation=None):
     base_model = keras.applications.densenet.DenseNet121(include_top=False, input_shape=(input_size, input_size, 3), pooling='avg',  weights='imagenet')
     x = base_model.output  # (None, 1024)
     x = keras.layers.Dropout(0.5)(x)
-    # x = keras.layers.Dense(n_class, activation='softmax', kernel_regularizer=keras.regularizers.l2())(x)
-    x = keras.layers.Dense(n_class, kernel_regularizer=keras.regularizers.l2())(x)  # no softmax for stability
+    x = keras.layers.Dense(n_class, activation=activation, kernel_regularizer=keras.regularizers.l2())(x)  # no softmax for stability
     model = Model(inputs=base_model.input, outputs=x)
 
     return model
@@ -70,14 +71,32 @@ def position_augment(img, label, preprocess_fxn=preprocess_densenet):
     img = preprocess_fxn(img, label)
     return img, label
 
-def augment_map(*datapoint):
-    img, label = datapoint
-    # img, label = position_augment(img, label, preprocess_fxn=lambda x, y: x,y) # to check images
-    img, label = position_augment(img, label)
+def rotate_augment(img, label):
+    rad_to_deg = tf.cast(math.pi / 180, tf.float32)
+    img = tf.cast(img, tf.float32)
+    label = tf.cast(label, tf.float32)
+    neut_img = tfa.image.rotate(img, -label * rad_to_deg, interpolation='BILINEAR')
+    rand_rot_val = tf.random.uniform([1], minval=-180, maxval=180)
+    rotated_img = tfa.image.rotate(neut_img, -rand_rot_val * rad_to_deg, interpolation='BILINEAR')
+    norm_rot_angle = rand_rot_val / 180 # to [-1, 1]
+    rotated_img, norm_rot_angle = position_augment(rotated_img, norm_rot_angle)
+    return rotated_img, norm_rot_angle
 
+def val_rot_map(img, label):
+    label = label / 180
+    img, label = preprocess_densenet(img, label)
     return img, label
 
-def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, excel_path=None):
+# def augment_map(*datapoint):
+#     img, label = datapoint
+#     # img, label = position_augment(img, label, preprocess_fxn=lambda x, y: x,y) # to check images
+#     img, label = position_augment(img, label)
+#
+#     return img, label
+
+def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val_map=preprocess_densenet, epochs=20,
+                      save_path=None, excel_path=None, n_class=None, activation=None, loss=None, metrics=None):
+
     AUTOTUNE = tf.data.experimental.AUTOTUNE
 
     train_ds, n_train, val_ds, n_val, n_labels = get_numpy_ds
@@ -91,16 +110,21 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, epochs=20, save_path=None, ex
     # one_item = next(iter_ds)
 
     #shuffle MUST be after cache, otherwise data is always fed in the same way
-    train_ds = train_ds.cache().map(augment_map).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
+    train_ds = train_ds.cache().map(augment).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
     # no need to repeat val_ds; it will run from top every time.
-    val_ds = val_ds.cache().map(preprocess_densenet).batch(batch_size).prefetch(AUTOTUNE)
+    val_ds = val_ds.cache().map(val_map).batch(batch_size).prefetch(AUTOTUNE)
 
-    model = load_densenet(n_class=n_labels)
+    if n_class is None:
+        n_class = n_labels
+    model = load_densenet(n_class=n_class, activation=activation)
 
     optimizer = Adam(lr=1e-4)
-    loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    if loss is None:
+        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    if metrics is None:
+        metrics = [keras.metrics.SparseCategoricalAccuracy()]
     # can provide logits for SparseCategoricalAccuracy since argmax of logits and probs are the same
-    model.compile(optimizer=optimizer, loss=loss, metrics=[keras.metrics.SparseCategoricalAccuracy()])
+    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     callbacks = [
         tf.keras.callbacks.ReduceLROnPlateau(factor=0.2, patience=5, min_lr=1e-6, min_delta=1e-3),
