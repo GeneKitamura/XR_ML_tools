@@ -367,9 +367,9 @@ def create_dicom_images():
         bs = dcm.BitsStored
 
         try:
-            _img = exposure.rescale_intensity(_img, in_range=('uint' + str(bs)))
-        except ValueError:  # odd number pixel
-            pass
+            _img = exposure.rescale_intensity(_img, in_range=(0, 2**int(bs) - 1))
+        except ValueError as e:
+            print('Rescale error with bs of {} at {}'.format(bs, idx))
 
         if dcm.PhotometricInterpretation == 'MONOCHROME1':
             _img = cv2.bitwise_not(_img)
@@ -399,7 +399,7 @@ def create_dicom_images():
             return 1, idx, 1
 
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(img_creater, idx, row, return_imgs=True) for idx, row in c_df.iterrows()}
+        futures = {executor.submit(img_creater, idx, row, True, return_imgs=True) for idx, row in c_df.iterrows()}
 
     index_list = []
     image_list = []

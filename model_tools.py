@@ -46,32 +46,42 @@ def load_densenet(input_size=224, n_class=3, activation=None):
 
     return model
 
-def preprocess_densenet(img, label):
-    # for densenet, mode='torch'
-    img = tf.cast(img, tf.float32)
-    mean = [0.485, 0.456, 0.406]
-    std = [0.229, 0.224, 0.225]
+def preprocess_densenet(uint16=False):
+    if not uint16:
+        pixel_max = 255.
+    else:
+        pixel_max = 65535.
 
-    c0 = (img[..., 0] / 255. - mean[0]) / std[0]
-    c1 = (img[..., 1] / 255. - mean[0]) / std[1]
-    c2 = (img[..., 2] / 255. - mean[0]) / std[2]
-    new_img = tf.stack([c0, c1, c2], axis=-1)
+    def inner_fxn(img, label):
+        # for densenet, mode='torch'
+        img = tf.cast(img, tf.float32)
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
 
-    return new_img, label
+        c0 = (img[..., 0] / pixel_max - mean[0]) / std[0]
+        c1 = (img[..., 1] / pixel_max - mean[0]) / std[1]
+        c2 = (img[..., 2] / pixel_max - mean[0]) / std[2]
+        new_img = tf.stack([c0, c1, c2], axis=-1)
+        return new_img, label
+
+    return inner_fxn
 
 def trunc_name(*datapoint):
     img, label, name = datapoint
     return img, label
 
-def position_augment(img, label, preprocess_fxn=preprocess_densenet):
+def pass_through(x, y):
+    return x, y
+
+def position_augment(img, label):
     # data should be in uint8 or uint16 for brightness/contrast
-    img = tf.image.random_brightness(img, 0.5)
-    img = tf.image.random_contrast(img, 0.5, 1.5)
+    img = tf.image.random_brightness(img, 0.3)
+    img = tf.image.random_contrast(img, 0.7, 1.3)
     img = tf.image.random_crop(img, (224, 224, 3))
-    img = preprocess_fxn(img, label)
     return img, label
 
 def rotate_augment(img, label):
+    img, label = position_augment(img, label) #first while dtype is uint8/uint16
     rad_to_deg = tf.cast(math.pi / 180, tf.float32)
     img = tf.cast(img, tf.float32)
     label = tf.cast(label, tf.float32)
@@ -79,22 +89,14 @@ def rotate_augment(img, label):
     rand_rot_val = tf.random.uniform([1], minval=-180, maxval=180)
     rotated_img = tfa.image.rotate(neut_img, -rand_rot_val * rad_to_deg, interpolation='BILINEAR')
     norm_rot_angle = rand_rot_val / 180 # to [-1, 1]
-    rotated_img, norm_rot_angle = position_augment(rotated_img, norm_rot_angle)
     return rotated_img, norm_rot_angle
 
 def val_rot_map(img, label):
-    label = label / 180
-    img, label = preprocess_densenet(img, label)
-    return img, label
+    norm_rot_angle = label / 180
+    return img, norm_rot_angle
 
-# def augment_map(*datapoint):
-#     img, label = datapoint
-#     # img, label = position_augment(img, label, preprocess_fxn=lambda x, y: x,y) # to check images
-#     img, label = position_augment(img, label)
-#
-#     return img, label
-
-def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val_map=preprocess_densenet, epochs=20,
+def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val_map=pass_through,
+                      preprocess_map=preprocess_densenet, preprocess_uint16=False, epochs=20,
                       save_path=None, excel_path=None, n_class=None, activation=None, loss=None, metrics=None):
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
@@ -105,14 +107,16 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val
     train_ds = train_ds.map(trunc_name) #get rid of name/idx
     val_ds = val_ds.map(trunc_name) #get rid of name/idx
 
+    inner_preprocess = preprocess_map(uint16=preprocess_uint16)
+
     # to see items
     # iter_ds = iter(train_ds)
     # one_item = next(iter_ds)
 
     #shuffle MUST be after cache, otherwise data is always fed in the same way
-    train_ds = train_ds.cache().map(augment).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
+    train_ds = train_ds.cache().map(augment).map(inner_preprocess).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
     # no need to repeat val_ds; it will run from top every time.
-    val_ds = val_ds.cache().map(val_map).batch(batch_size).prefetch(AUTOTUNE)
+    val_ds = val_ds.cache().map(val_map).map(inner_preprocess).batch(batch_size).prefetch(AUTOTUNE)
 
     if n_class is None:
         n_class = n_labels
@@ -149,7 +153,7 @@ def eval_trained_model(get_numpy_ds, model_weights):
     model.load_weights(model_weights)
 
     total_inp_data = next(iter(val_ds.batch(n_val)))
-    processed_val = preprocess_densenet(total_inp_data[0], total_inp_data[1])
+    processed_val = preprocess_densenet()(total_inp_data[0], total_inp_data[1])
     predictions = model.predict(processed_val)
     pred_labels = np.argmax(predictions, axis=1)
     true_labels = total_inp_data[1].numpy()
