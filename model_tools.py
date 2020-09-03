@@ -84,20 +84,32 @@ def rotate_augment(img, label):
     img, label = position_augment(img, label) #first while dtype is uint8/uint16
     deg_to_radians = tf.cast(math.pi / 180, tf.float32)
     img = tf.cast(img, tf.float32)
-    label = tf.cast(label, tf.float32)
-    neut_img = tfa.image.rotate(img, -label * deg_to_radians, interpolation='BILINEAR')
-    rand_rot_val = tf.random.uniform([1], minval=-180, maxval=180)
-    rotated_img = tfa.image.rotate(neut_img, -rand_rot_val * deg_to_radians, interpolation='BILINEAR')
-    norm_rot_angle = rand_rot_val / 180 # to [-1, 1]
+    label = tf.cast(label, tf.float32) #angle of correction
+
+    #new
+    rand_rot_val = tf.random.uniform([1], minval=-179, maxval=180) #[-179, 180)
+    angle_change = label + rand_rot_val # can be greater than 180
+    # labels are degree of correction, tfa rotates in opposite direction
+    rotated_img = tfa.image.rotate(img, -angle_change * deg_to_radians, interpolation='BILINEAR')
+    norm_rot_angle = rand_rot_val / 180 # to [-1, 1] #In direction of rotation, not degree of correction
+
+    #old
+    # neut_img = tfa.image.rotate(img, -label * deg_to_radians, interpolation='BILINEAR')
+    # # labels are degree of correction, tfa rotates in opposite direction
+    # rand_rot_val = tf.random.uniform([1], minval=-179, maxval=180) #[-179, 180)
+    # rotated_img = tfa.image.rotate(neut_img, -rand_rot_val * deg_to_radians, interpolation='BILINEAR')
+    # norm_rot_angle = rand_rot_val / 180 # to [-1, 1] #In direction of rotation, not degree of correction
+
     return rotated_img, norm_rot_angle
 
 def val_rot_map(img, label):
-    norm_rot_angle = -label / 180
+    norm_rot_angle = -label / 180 # in direction of rotation
     return img, norm_rot_angle
 
 def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val_map=pass_through,
                       preprocess_map=preprocess_densenet, preprocess_uint16=False, epochs=20,
-                      save_path=None, excel_path=None, n_class=None, activation=None, loss=None, metrics=None):
+                      save_path=None, excel_path=None, n_class=None, activation=None,
+                      loss=None, metrics=None, monitor='val_loss'):
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
 
@@ -131,9 +143,9 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     callbacks = [
-        tf.keras.callbacks.ReduceLROnPlateau(factor=0.2, patience=5, min_lr=1e-6, min_delta=1e-3),
-        tf.keras.callbacks.EarlyStopping(patience=15, min_delta=1e-3),
-        tf.keras.callbacks.ModelCheckpoint(filepath=save_path, save_best_only=True, save_weights_only=True)
+        tf.keras.callbacks.ReduceLROnPlateau(monitor=monitor, factor=0.2, patience=10, min_lr=1e-6, min_delta=1e-3),
+        tf.keras.callbacks.EarlyStopping(monitor=monitor, patience=20, min_delta=1e-3),
+        tf.keras.callbacks.ModelCheckpoint(monitor=monitor, filepath=save_path, save_best_only=True, save_weights_only=True)
     ]
 
     train_start = time.time()
