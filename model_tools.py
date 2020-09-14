@@ -80,31 +80,38 @@ def position_augment(img, label):
     img = tf.image.random_crop(img, (224, 224, 3))
     return img, label
 
-def rotate_augment(img, label):
-    img, label = position_augment(img, label) #first while dtype is uint8/uint16
-    deg_to_radians = tf.cast(math.pi / 180, tf.float32)
-    img = tf.cast(img, tf.float32)
-    label = tf.cast(label, tf.float32) #angle of correction
+def rotate_augment(deg_rotation=180):
 
-    #new
-    rand_rot_val = tf.random.uniform([1], minval=-179, maxval=180) #[-179, 180)
-    angle_change = label + rand_rot_val # can be greater than 180
-    # labels are degree of correction, tfa rotates in opposite direction
-    rotated_img = tfa.image.rotate(img, -angle_change * deg_to_radians, interpolation='BILINEAR')
-    norm_rot_angle = rand_rot_val / 180 # to [-1, 1] #In direction of rotation, not degree of correction
+    def inner_fxn(img, label):
+        img, label = position_augment(img, label) #first while dtype is uint8/uint16
+        deg_to_radians = tf.cast(math.pi / 180, tf.float32)
+        img = tf.cast(img, tf.float32)
+        label = tf.cast(label, tf.float32) #angle of correction
 
-    #old
-    # neut_img = tfa.image.rotate(img, -label * deg_to_radians, interpolation='BILINEAR')
-    # # labels are degree of correction, tfa rotates in opposite direction
-    # rand_rot_val = tf.random.uniform([1], minval=-179, maxval=180) #[-179, 180)
-    # rotated_img = tfa.image.rotate(neut_img, -rand_rot_val * deg_to_radians, interpolation='BILINEAR')
-    # norm_rot_angle = rand_rot_val / 180 # to [-1, 1] #In direction of rotation, not degree of correction
+        #new
+        rand_rot_val = tf.random.uniform([1], minval=-deg_rotation, maxval=deg_rotation) #[-deg_rotation, deg_rotation)
+        angle_change = label + rand_rot_val # can be greater than 180
+        # labels are degree of correction, tfa rotates in opposite direction
+        rotated_img = tfa.image.rotate(img, -angle_change * deg_to_radians, interpolation='BILINEAR')
+        norm_rot_angle = rand_rot_val / deg_rotation # to [-1, 1] #In direction of rotation, not degree of correction
 
-    return rotated_img, norm_rot_angle
+        #old
+        # neut_img = tfa.image.rotate(img, -label * deg_to_radians, interpolation='BILINEAR')
+        # # labels are degree of correction, tfa rotates in opposite direction
+        # rand_rot_val = tf.random.uniform([1], minval=-179, maxval=180) #[-179, 180)
+        # rotated_img = tfa.image.rotate(neut_img, -rand_rot_val * deg_to_radians, interpolation='BILINEAR')
+        # norm_rot_angle = rand_rot_val / 180 # to [-1, 1] #In direction of rotation, not degree of correction
 
-def val_rot_map(img, label):
-    norm_rot_angle = -label / 180 # in direction of rotation
-    return img, norm_rot_angle
+        return rotated_img, norm_rot_angle
+
+    return inner_fxn
+
+def val_rot_map(deg_rotation=180):
+
+    def inner_fxn(img, label):
+        norm_rot_angle = -label / deg_rotation # in direction of rotation
+        return img, norm_rot_angle
+    return inner_fxn
 
 def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val_map=pass_through,
                       preprocess_map=preprocess_densenet, preprocess_uint16=False, epochs=20,
