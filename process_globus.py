@@ -7,6 +7,7 @@ import re
 import shutil
 import cv2
 import skimage
+import tensorflow as tf
 
 from skimage import transform, exposure, util, io
 from collections import defaultdict
@@ -342,6 +343,34 @@ def check_dicom_files():
 
     # Cannot return from functions using concurrent module, so run on Jupyter
 
+def padded_resize(img, new_size):
+    dtype = img.dtype
+
+    if len(img.shape) == 3:
+        img = img[..., 0]
+
+    h, w = img.shape
+    asp_ratio = h / w
+    half_pix_diff = abs(h - w)
+    if half_pix_diff % 2 != 0:  # odd number of pixels
+        pixel_tail = 1
+    else:
+        pixel_tail = 0
+
+    half_pix_diff = half_pix_diff // 2
+    if asp_ratio >= 1.0:  # height larger, image tall
+        padded_img = np.zeros((h, h))
+        remaing_pixels = h - half_pix_diff - pixel_tail
+        padded_img[..., half_pix_diff:remaing_pixels] = img
+    else:
+        padded_img = np.zeros((w, w))
+        remaing_pixels = w - half_pix_diff - pixel_tail
+        padded_img[half_pix_diff:remaing_pixels, ...] = img
+
+    padded_img = padded_img.astype(dtype)
+    img = transform.resize(padded_img, (new_size, new_size), mode='reflect', anti_aliasing=True)
+    return img
+
 def create_dicom_images():
     # Cannot return from functions using concurrent module, so run on Jupyter
 
@@ -352,8 +381,10 @@ def create_dicom_images():
     stack=False
     img_root=IMG_ROOT
     np_save_file = './224_0to1495'
+    resize_with_pad = False
 
-    def img_creater(idx, row, resize, flip=False, save_orig_dir=None, return_imgs=True):
+    def img_creater(idx, row, resize, flip=False, save_orig_dir=None, return_imgs=True, resize_with_pad=resize_with_pad):
+
         dicom_path = os.path.join(img_root, row['full_path'])
         dcm = pydicom.dcmread(dicom_path)
 
@@ -382,7 +413,10 @@ def create_dicom_images():
             save_img_as_jpg(_img, c_name)
 
         if resize:
-            _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True)  # img_as_float
+            if resize_with_pad:
+                _img = padded_resize(_img, output_size)
+            else:
+                _img = transform.resize(_img, (output_size, output_size), mode='reflect', anti_aliasing=True)  # img_as_float
 
         if conv_to_uint16:
             _img = skimage.img_as_uint(_img)

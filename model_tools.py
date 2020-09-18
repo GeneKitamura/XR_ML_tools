@@ -73,17 +73,21 @@ def trunc_name(*datapoint):
 def pass_through(x, y):
     return x, y
 
-def position_augment(img, label):
-    # data should be in uint8 or uint16 for brightness/contrast
-    img = tf.image.random_brightness(img, 0.3)
-    img = tf.image.random_contrast(img, 0.7, 1.3)
-    img = tf.image.random_crop(img, (224, 224, 3))
-    return img, label
-
-def rotate_augment(deg_rotation=180):
+def position_augment(final_size=224):
 
     def inner_fxn(img, label):
-        img, label = position_augment(img, label) #first while dtype is uint8/uint16
+    # data should be in uint8 or uint16 for brightness/contrast
+        img = tf.image.random_brightness(img, 0.3)
+        img = tf.image.random_contrast(img, 0.7, 1.3)
+        img = tf.image.random_crop(img, (final_size, final_size, 3))
+        return img, label
+
+    return inner_fxn
+
+def rotate_augment(deg_rotation=180, final_size=224):
+
+    def inner_fxn(img, label):
+        img, label = position_augment(final_size)(img, label) #first while dtype is uint8/uint16
         deg_to_radians = tf.cast(math.pi / 180, tf.float32)
         img = tf.cast(img, tf.float32)
         label = tf.cast(label, tf.float32) #angle of correction
@@ -113,10 +117,10 @@ def val_rot_map(deg_rotation=180):
         return img, norm_rot_angle
     return inner_fxn
 
-def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val_map=pass_through,
+def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), val_map=pass_through,
                       preprocess_map=preprocess_densenet, preprocess_uint16=False, epochs=20,
                       save_path=None, excel_path=None, n_class=None, activation=None,
-                      loss=None, metrics=None, monitor='val_loss'):
+                      loss=None, metrics=None, monitor='val_loss', net_input=224):
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
 
@@ -139,7 +143,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment, val
 
     if n_class is None:
         n_class = n_labels
-    model = load_densenet(n_class=n_class, activation=activation)
+    model = load_densenet(input_size=net_input, n_class=n_class, activation=activation)
 
     optimizer = Adam(lr=1e-4)
     if loss is None:
