@@ -155,7 +155,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
 
     callbacks = [
         tf.keras.callbacks.ReduceLROnPlateau(monitor=monitor, factor=0.2, patience=10, min_lr=1e-6, min_delta=1e-3),
-        tf.keras.callbacks.EarlyStopping(monitor=monitor, patience=20, min_delta=1e-3),
+        tf.keras.callbacks.EarlyStopping(monitor=monitor, patience=30, min_delta=1e-3),
         tf.keras.callbacks.ModelCheckpoint(monitor=monitor, filepath=save_path, save_best_only=True, save_weights_only=True)
     ]
 
@@ -169,10 +169,10 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
         c_df[key] = val
     c_df.to_excel(excel_path, index=False)
 
-def eval_trained_model(get_numpy_ds, model_weights):
+def eval_trained_model(get_numpy_ds, model_weights, net_input=224):
     _, _, val_ds, n_val, n_labels = get_numpy_ds
 
-    model = load_densenet(n_class=n_labels)
+    model = load_densenet(input_size=net_input, n_class=n_labels)
     model.load_weights(model_weights)
 
     total_inp_data = next(iter(val_ds.batch(n_val)))
