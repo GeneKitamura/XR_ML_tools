@@ -373,6 +373,7 @@ def padded_resize(img, new_size):
 
 def create_dicom_images():
     # Cannot return from functions using concurrent module, so run on Jupyter
+    # if saving jpgs, do 200 at a time since you'll run into memory issues
 
     c_df = None
     output_size=238

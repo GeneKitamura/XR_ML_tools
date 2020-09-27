@@ -12,8 +12,6 @@ from skimage import io
 from glob import glob
 from sklearn import metrics
 
-sys.path.append('..')
-
 from tensorflow import keras
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -124,7 +122,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
 
     AUTOTUNE = tf.data.experimental.AUTOTUNE
 
-    train_ds, n_train, val_ds, n_val, n_labels = get_numpy_ds
+    train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels = get_numpy_ds
     train_steps = math.ceil(n_train/batch_size)
     val_steps = math.ceil(n_val/batch_size)
     train_ds = train_ds.map(trunc_name) #get rid of name/idx
@@ -170,7 +168,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
     c_df.to_excel(excel_path, index=False)
 
 def eval_trained_model(get_numpy_ds, model_weights, net_input=224):
-    _, _, val_ds, n_val, n_labels = get_numpy_ds
+    _, _, val_ds, n_val, test_ds, n_test, n_labels = get_numpy_ds
 
     model = load_densenet(input_size=net_input, n_class=n_labels)
     model.load_weights(model_weights)
