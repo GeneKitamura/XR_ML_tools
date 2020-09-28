@@ -68,32 +68,37 @@ def make_TFR_from_loaded_arrays(input_imgs, input_labels, input_names, save_path
                 example = _serialize_img(c_imgs[i], c_labels[i], c_names[i])
                 writer.write(example)
 
-def read_TFR_from_array(tr_file='./tfr_sample'): # need dtype for arrays
-    raw_dataset = tf.data.TFRecordDataset(tr_file)
+def read_TFR_from_array(array_dtype=np.uint16): # need dtype for arrays
 
-    feature_description = {
-        'img': tf.io.FixedLenFeature([], tf.string),
-        'dtype': tf.io.FixedLenFeature([], tf.string),
-        'label': tf.io.FixedLenFeature([], tf.int64),
-        'name': tf.io.FixedLenFeature([], tf.string)
-    }
+    def inner_fxn(tf_file):
+        raw_dataset = tf.data.TFRecordDataset(tf_file)
 
-    def _parse_function(example_proto):
-        # Parse the input `tf.Example` proto using the dictionary above.
-        return tf.io.parse_single_example(example_proto, feature_description)
+        feature_description = {
+            'img': tf.io.FixedLenFeature([], tf.string),
+            'dtype': tf.io.FixedLenFeature([], tf.string),
+            'label': tf.io.FixedLenFeature([], tf.int64),
+            'name': tf.io.FixedLenFeature([], tf.string)
+        }
 
-    parsed_dataset = raw_dataset.map(_parse_function)
+        def _parse_function(example_proto):
+            # Parse the input `tf.Example` proto using the dictionary above.
+            return tf.io.parse_single_example(example_proto, feature_description)
 
-    def _format_bytes(datapoint):
-        img_as_string = datapoint['img']
-        dtype = np.dtype(datapoint['dtype'].numpy())
-        label = datapoint['label']
-        name = datapoint['name']
-        decoded_img = tf.io.parse_tensor(img_as_string, dtype)
-        return decoded_img, label, name
+        parsed_dataset = raw_dataset.map(_parse_function)
 
-    parsed_dataset = parsed_dataset.map(_format_bytes)
-    return parsed_dataset
+        def _format_bytes(datapoint):
+            img_as_string = datapoint['img']
+            dtype = datapoint['dtype']
+            label = datapoint['label']
+            name = datapoint['name']
+            decoded_img = tf.io.parse_tensor(img_as_string, array_dtype)
+            # NOT Eager tensor, so cannot use parsed values to parse_tensor
+            return decoded_img, label, name
+
+        parsed_dataset = parsed_dataset.map(_format_bytes)
+        return parsed_dataset
+
+    return inner_fxn
 
 def show_TFR_from_array(parsed_dataset):
     for datapoint in parsed_dataset.take(10):
@@ -137,7 +142,7 @@ def read_TFR_from_files(string_or_tfDataset): # if tf.io.read_file, don't need d
     parsed_dataset = raw_dataset.map(_parse_function)
     return parsed_dataset
 
-def show_images_from_TFR(parsed_dataset):
+def show_images_from_files(parsed_dataset):
     for datapoint in parsed_dataset.take(1):
         img = tf.io.decode_image(datapoint['img'])
         label = datapoint['label'].numpy()

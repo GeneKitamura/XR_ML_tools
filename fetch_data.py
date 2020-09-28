@@ -4,6 +4,11 @@ import tensorflow as tf
 import skimage
 
 from glob import glob
+from .TFRecording import read_TFR_from_array
+from .model_tools import trunc_name
+
+
+AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 # will only use values from df_excel with rotation angles
 # manually changed relook cases for './pos_hard_processed/rot_labeled_0to3945.xlsx'
@@ -139,13 +144,40 @@ def prepare_dataset(df_excel, label_col, train_bool_col, **kwargs):
 
     return train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels
 
-def TFR_dataset(train_dir, val_dir):
+def TFR_dataset(train_dir, val_dir, test_dir=None, array_dtype=np.uint16, trunc_name=False):
+
+    n_labels = np.array([0])
     train_files = glob(train_dir)
     n_train = len(train_files)
     val_files = glob(val_dir)
     n_val = len(val_files)
+    test_files = None
+    n_test = None
 
     train_ds = tf.data.Dataset.from_tensor_slices(train_files)
     val_ds = tf.data.Dataset.from_tensor_slices(val_files)
+    test_ds = None
 
+    if not trunc_name:
+        trunc_fxn = lambda *x: x
+    else:
+        trunc_fxn = trunc_name
+
+    def decode_TFR_trunc(tfr_files):
+        decode_tfr = read_TFR_from_array(array_dtype)
+        parsed_ds = decode_tfr(tfr_files).map(trunc_fxn)
+        return parsed_ds
+
+    # need n for interleave cycle_length (number of TFR files, NOT total n of images)
+    train_ds = train_ds.interleave(lambda x: decode_TFR_trunc(x), cycle_length=n_train, block_length=1, num_parallel_calls=AUTOTUNE)
+    val_ds = val_ds.interleave(lambda x: decode_TFR_trunc(x), cycle_length=n_val, block_length=1, num_parallel_calls=AUTOTUNE)
+    #return decoded_img, label
+
+    if test_dir is not None:
+        test_files = glob(test_dir)
+        n_test = len(test_files)
+        test_ds = tf.data.Dataset.from_tensor_slices(test_files)
+        test_ds = test_ds.interleave(lambda x: decode_TFR_trunc(x), cycle_length=n_test, block_length=1, num_parallel_calls=AUTOTUNE)
+
+    return train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels
 
