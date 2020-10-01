@@ -142,42 +142,34 @@ def prepare_dataset(df_excel, label_col, train_bool_col, **kwargs):
     train_ds = tf.data.Dataset.from_tensor_slices((train_images, train_labels, train_idx))
     val_ds = tf.data.Dataset.from_tensor_slices((val_images, val_labels, val_idx))
 
-    return train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels
+    return (train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels)
 
-def TFR_dataset(train_dir, val_dir, test_dir=None, array_dtype=np.uint16, trunc_name=False):
+def TFR_dataset(train_dir, val_dir, n_train, n_val, n_labels, test_dir=None, n_test=None, array_dtype=np.uint16, train_size=660, val_size=600):
 
-    n_labels = np.array([0])
     train_files = glob(train_dir)
-    n_train = len(train_files)
+    len_train = len(train_files)
     val_files = glob(val_dir)
-    n_val = len(val_files)
+    len_val = len(val_files)
     test_files = None
-    n_test = None
+    len_test = None
 
     train_ds = tf.data.Dataset.from_tensor_slices(train_files)
     val_ds = tf.data.Dataset.from_tensor_slices(val_files)
     test_ds = None
 
-    if not trunc_name:
-        trunc_fxn = lambda *x: x
-    else:
-        trunc_fxn = trunc_name
-
-    def decode_TFR_trunc(tfr_files):
-        decode_tfr = read_TFR_from_array(array_dtype)
-        parsed_ds = decode_tfr(tfr_files).map(trunc_fxn)
-        return parsed_ds
+    train_decode_tfr = read_TFR_from_array(train_size, array_dtype=array_dtype)
+    val_decode_tfr = read_TFR_from_array(val_size, array_dtype=array_dtype)
 
     # need n for interleave cycle_length (number of TFR files, NOT total n of images)
-    train_ds = train_ds.interleave(lambda x: decode_TFR_trunc(x), cycle_length=n_train, block_length=1, num_parallel_calls=AUTOTUNE)
-    val_ds = val_ds.interleave(lambda x: decode_TFR_trunc(x), cycle_length=n_val, block_length=1, num_parallel_calls=AUTOTUNE)
+    train_ds = train_ds.interleave(lambda x: train_decode_tfr(x), cycle_length=len_train, block_length=1, num_parallel_calls=AUTOTUNE)
+    val_ds = val_ds.interleave(lambda x: val_decode_tfr(x), cycle_length=len_val, block_length=1, num_parallel_calls=AUTOTUNE)
     #return decoded_img, label
 
     if test_dir is not None:
         test_files = glob(test_dir)
-        n_test = len(test_files)
+        len_test = len(test_files)
         test_ds = tf.data.Dataset.from_tensor_slices(test_files)
-        test_ds = test_ds.interleave(lambda x: decode_TFR_trunc(x), cycle_length=n_test, block_length=1, num_parallel_calls=AUTOTUNE)
+        test_ds = test_ds.interleave(lambda x: val_decode_tfr(x), cycle_length=len_test, block_length=1, num_parallel_calls=AUTOTUNE)
 
-    return train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels
+    return (train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels)
 

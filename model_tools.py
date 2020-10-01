@@ -125,6 +125,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
     train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels = get_numpy_ds
     train_steps = math.ceil(n_train/batch_size)
     val_steps = math.ceil(n_val/batch_size)
+
     train_ds = train_ds.map(trunc_name) #get rid of name/idx
     val_ds = val_ds.map(trunc_name) #get rid of name/idx
 

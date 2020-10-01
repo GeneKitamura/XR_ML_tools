@@ -68,7 +68,7 @@ def make_TFR_from_loaded_arrays(input_imgs, input_labels, input_names, save_path
                 example = _serialize_img(c_imgs[i], c_labels[i], c_names[i])
                 writer.write(example)
 
-def read_TFR_from_array(array_dtype=np.uint16): # need dtype for arrays
+def read_TFR_from_array(out_shape, array_dtype=np.uint16): # need dtype for arrays
 
     def inner_fxn(tf_file):
         raw_dataset = tf.data.TFRecordDataset(tf_file)
@@ -91,7 +91,7 @@ def read_TFR_from_array(array_dtype=np.uint16): # need dtype for arrays
             dtype = datapoint['dtype']
             label = datapoint['label']
             name = datapoint['name']
-            decoded_img = tf.io.parse_tensor(img_as_string, array_dtype)
+            decoded_img = tf.ensure_shape(tf.io.parse_tensor(img_as_string, array_dtype), (out_shape, out_shape, 3))
             # NOT Eager tensor, so cannot use parsed values to parse_tensor
             return decoded_img, label, name
 
@@ -101,7 +101,7 @@ def read_TFR_from_array(array_dtype=np.uint16): # need dtype for arrays
     return inner_fxn
 
 def show_TFR_from_array(parsed_dataset):
-    for datapoint in parsed_dataset.take(10):
+    for datapoint in parsed_dataset.take(10): # now EAGER tensor
         decoded_img, label, name = datapoint
         decoded_img = decoded_img.numpy()
         label = datapoint['label'].numpy()
