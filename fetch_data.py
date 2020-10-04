@@ -122,11 +122,11 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
     return out_tup
 
 
-def prepare_dataset(df_excel, label_col, train_bool_col, **kwargs):
+def prepare_dataset(*args, **kwargs):
     (train_images, train_labels, train_idx, train_indices,
      val_images, val_labels, val_idx, val_indices,
      test_images, test_labels, test_idx, test_indices,
-     n_labels) = data_get(df_excel, label_col, train_bool_col, **kwargs) # as ubyte
+     n_labels) = data_get(*args, **kwargs) # as ubyte
 
     test_ds = None
     n_test = None

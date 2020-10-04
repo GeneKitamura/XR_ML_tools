@@ -136,6 +136,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
     # one_item = next(iter_ds)
 
     #shuffle MUST be after cache, otherwise data is always fed in the same way
+    #batch after map for each tf random function to have different values on each element, rather than same value per batch
     train_ds = train_ds.cache().map(augment).map(inner_preprocess).shuffle(buffer_size=1500).batch(batch_size).repeat().prefetch(AUTOTUNE)
     # no need to repeat val_ds; it will run from top every time.
     val_ds = val_ds.cache().map(val_map).map(inner_preprocess).batch(batch_size).prefetch(AUTOTUNE)
