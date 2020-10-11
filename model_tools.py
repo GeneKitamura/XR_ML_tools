@@ -35,6 +35,9 @@ def split_train_val_df(labels_df, label_types=None, train_split=0.8):
 
     return train_idx
 
+def split_tr_val_te(labels_df):
+    
+
 def load_densenet(input_size=224, n_class=3, activation=None):
     base_model = keras.applications.densenet.DenseNet121(include_top=False, input_shape=(input_size, input_size, 3), pooling='avg',  weights='imagenet')
     x = base_model.output  # (None, 1024)

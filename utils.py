@@ -46,3 +46,14 @@ def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
     sampled_montage_df = sampled_montage_df.drop_duplicates(subset=[params['non_pos_fname'], params['non_pos_lname'], 'Exam Completed Date'])
     plt.hist(sampled_montage_df[params['non_pos_age']], bins=age_bounds)
     return sampled_montage_df
+
+def extract_idx_from_df(excel_n):
+    cdf = pd.read_excel(excel_n)
+    columns = cdf.columns
+    e_dict = {}
+    for item in columns:
+        indices = cdf[item].dropna().map(int).values
+        if len(indices) == 0:
+            continue
+        e_dict[item] = indices
+    return e_dict
