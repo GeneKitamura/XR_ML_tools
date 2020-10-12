@@ -19,7 +19,6 @@ from tensorflow.keras.optimizers import Adam
 
 def split_train_val_df(labels_df, label_types=None, train_split=0.8):
     # labels_df with meaningful index to link back to whole df
-
     train_idx = {}
     if label_types is None:
         label_types = ['pos_label', 'hard_label']
@@ -35,8 +34,21 @@ def split_train_val_df(labels_df, label_types=None, train_split=0.8):
 
     return train_idx
 
-def split_tr_val_te(labels_df):
-    
+def split_tr_val_te(input_df, label=None):
+    cdf = input_df.copy()
+    traini = split_train_val_df(cdf, [label], train_split=0.7)[label]
+    cdf['tr_val_te'] = 2  # 0:train, 1:val, 2:test
+    cdf.loc[traini, 'tr_val_te'] = 0
+
+    nontrain_df = cdf[~cdf.index.isin(traini)]
+    vali = split_train_val_df(nontrain_df, [label], train_split=0.5)[label]
+    cdf.loc[vali, 'tr_val_te'] = 1
+    testi = cdf[~cdf.index.isin(traini + vali)].index
+
+    cdf['new_train'] = False
+    cdf.loc[traini, 'new_train'] = True
+
+    return cdf
 
 def load_densenet(input_size=224, n_class=3, activation=None):
     base_model = keras.applications.densenet.DenseNet121(include_top=False, input_shape=(input_size, input_size, 3), pooling='avg',  weights='imagenet')
