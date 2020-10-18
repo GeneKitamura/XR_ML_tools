@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import skimage
 
 from skimage import transform, exposure
 
@@ -35,13 +36,13 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
 
     plot_heat_map = None
 
-    #scaled_img_arrays = rescale_img(img_arrays)
-    scaled_img_arrays = img_arrays
-
     if len(img_arrays.shape) == 4:
         img_n, img_h, img_w, _ = img_arrays.shape
     else:
         img_n, img_h, img_w = img_arrays.shape
+
+    if img_arrays.dtype == np.uint16(1).dtype:
+        img_arrays = skimage.img_as_ubyte(img_arrays)
 
     if h_slot is None:
         h_slot = int(math.ceil(np.sqrt(img_n)))
@@ -52,6 +53,9 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
 
     fig, axes = plt.subplots(h_slot, w_slot, figsize=(width, height))
     fig.subplots_adjust(hspace=0.1, wspace=0)
+
+    #scaled_img_arrays = rescale_img(img_arrays)
+    scaled_img_arrays = img_arrays
 
     for ax, i in zip(axes.flatten(), range(img_n)):
         #img = rescale_img(scaled_img_arrays[i])

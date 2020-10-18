@@ -16,12 +16,12 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 # manually changed relook cases for './pos_hard_processed/rot_labeled_0to3945.xlsx'
 def data_get(df_excel, label_col, train_bool_col, index_name='index',
              train_npz='./pos_hard_npz/238_0to3495.npz', val_npz='./pos_hard_npz/224_0to3495.npz',
-             img_as_uint16=False, flip_RtoL=False, npz_df=None, use_df_index=True,
+             img_as_uint16=True, flip_RtoL_col=None, npz_df=None,
              df_start=0, df_end=None, expand_channels=True, test_set_col=None):
 
-    if flip_RtoL:
+    if flip_RtoL_col is not None:
         label_df = pd.read_excel(npz_df) # just for position of right vs. left, accounts for whole df/npz
-        right_bool = label_df['new_pos_label'].isin([4, 5, 6]).to_numpy()
+        right_bool = label_df[flip_RtoL_col].isin([4, 5, 6]).to_numpy()
 
     df = pd.read_excel(df_excel, index_col=index_name) # df only containing ll/rl with rot values
     df = df[df.index>df_start]
@@ -43,7 +43,7 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
     with np.load(train_npz) as f: #img_as_float
         train_images = f['image_array']
         train_indices = f['index_array']
-    if flip_RtoL:
+    if flip_RtoL_col is not None:
         flip_train_imgs = np.flip(train_images, axis=2)
         train_images = np.where(right_bool[..., None, None], flip_train_imgs, train_images)
 
@@ -56,7 +56,7 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
     with np.load(val_npz) as f: #img_as_float
         val_images = f['image_array']
         val_indices = f['index_array']
-    if flip_RtoL:
+    if flip_RtoL_col is not None:
         flip_train_imgs = np.flip(val_images, axis=2)
         val_images = np.where(right_bool[..., None, None], flip_train_imgs, val_images)
 
@@ -65,10 +65,18 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
     else:
         val_images = skimage.img_as_ubyte(val_images)
 
-    if use_df_index: # only if df index increases by 1 to max value
+    if val_images.shape[0] != df.shape[0]: #some df from whole npz
+        train_arange_df = pd.DataFrame({'index': np.arange(val_images.shape[0]), 'bool': False}).set_index('index')
+        val_arange_df = train_arange_df.copy()
+
+        train_arange_df.loc[train_idx] = True
+        np_train_idx = train_arange_df['bool']
+        val_arange_df.loc[val_idx] = True
+        np_val_idx = val_arange_df['bool']
+    elif df[-1:].index.values[0] == val_images.shape[0]: # every img/label on monotonically increasing df
         np_train_idx = train_idx
         np_val_idx = val_idx
-    else: # df index skips values to max value
+    else: # every img/label on discontinuous df
         arange_idx = np.arange(df.shape[0])
         train_bool = df[train_bool_col]
         np_train_idx = arange_idx[train_bool]
