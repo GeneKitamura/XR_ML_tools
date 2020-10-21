@@ -57,3 +57,11 @@ def extract_idx_from_df(excel_n):
             continue
         e_dict[item] = indices
     return e_dict
+
+def categorize_angle(x):
+    if x < 0:
+        return 1
+    elif x > 0:
+        return 2
+    else:
+        return 0

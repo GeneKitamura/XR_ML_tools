@@ -3,8 +3,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import skimage
+import tensorflow_addons as tfa
+import tensorflow as tf
 
 from skimage import transform, exposure
+
+def derotate(image_array, label_array):
+    img_holder = []
+    for img, float_label in zip(image_array, label_array):
+        img_holder.append(tfa.image.rotate(skimage.img_as_float(img), -float_label * tf.cast(math.pi / 180, tf.float32)).numpy())
+    img_holder = np.array(img_holder)
+    return img_holder
 
 def resize_label_array(label_array, size_tuple):
     old_h = label_array.shape[0]
@@ -41,7 +50,7 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
     else:
         img_n, img_h, img_w = img_arrays.shape
 
-    if img_arrays.dtype == np.uint16(1).dtype:
+    if img_arrays.dtype == np.uint16(1).dtype: # from uint16 to uint8 for plt
         img_arrays = skimage.img_as_ubyte(img_arrays)
 
     if h_slot is None:

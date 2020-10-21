@@ -19,10 +19,6 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
              img_as_uint16=True, flip_RtoL_col=None, npz_df=None,
              df_start=0, df_end=None, expand_channels=True, test_set_col=None):
 
-    if flip_RtoL_col is not None:
-        label_df = pd.read_excel(npz_df) # just for position of right vs. left, accounts for whole df/npz
-        right_bool = label_df[flip_RtoL_col].isin([4, 5, 6]).to_numpy()
-
     df = pd.read_excel(df_excel, index_col=index_name) # df only containing ll/rl with rot values
     df = df[df.index>df_start]
     if df_end is not None:
@@ -43,27 +39,30 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
     with np.load(train_npz) as f: #img_as_float
         train_images = f['image_array']
         train_indices = f['index_array']
-    if flip_RtoL_col is not None:
-        flip_train_imgs = np.flip(train_images, axis=2)
-        train_images = np.where(right_bool[..., None, None], flip_train_imgs, train_images)
-
-    if img_as_uint16: # Memory intensive
-        train_images = skimage.img_as_uint(train_images)
-    else:
-        train_images = skimage.img_as_ubyte(train_images)
-    dtype = train_images.dtype
 
     with np.load(val_npz) as f: #img_as_float
         val_images = f['image_array']
         val_indices = f['index_array']
-    if flip_RtoL_col is not None:
-        flip_train_imgs = np.flip(val_images, axis=2)
-        val_images = np.where(right_bool[..., None, None], flip_train_imgs, val_images)
 
-    if img_as_uint16:
+    if flip_RtoL_col is not None:
+        label_df = pd.read_excel(npz_df) # just for position of right vs. left, accounts for whole df/npz
+        right_bool = label_df[flip_RtoL_col].isin([4, 5, 6]).to_numpy()
+        right_bool = right_bool[:train_images.shape[0]] # when pos_df bigger than npz
+
+        flip_train_imgs = np.flip(train_images, axis=2)
+        train_images = np.where(right_bool[..., None, None], flip_train_imgs, train_images)
+
+        flip_val_imgs = np.flip(val_images, axis=2)
+        val_images = np.where(right_bool[..., None, None], flip_val_imgs, val_images)
+
+
+    if img_as_uint16: # Memory intensive
+        train_images = skimage.img_as_uint(train_images)
         val_images = skimage.img_as_uint(val_images)
     else:
+        train_images = skimage.img_as_ubyte(train_images)
         val_images = skimage.img_as_ubyte(val_images)
+    dtype = train_images.dtype
 
     if val_images.shape[0] != df.shape[0]: #some df from whole npz
         train_arange_df = pd.DataFrame({'index': np.arange(val_images.shape[0]), 'bool': False}).set_index('index')
