@@ -1,5 +1,3 @@
-
-
 import pandas as pd
 import numpy as np
 import tensorflow as tf
@@ -7,8 +5,6 @@ import skimage
 
 from glob import glob
 from .TFRecording import read_TFR_from_array
-from .model_tools import trunc_name
-
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
@@ -49,11 +45,11 @@ def data_get(df_excel, label_col, train_bool_col, index_name='index',
         right_bool = label_df[flip_RtoL_col].isin([4, 5, 6]).to_numpy()
         right_bool = right_bool[:train_images.shape[0]] # when pos_df bigger than npz
 
-        flip_train_imgs = np.flip(train_images, axis=2)
-        train_images = np.where(right_bool[..., None, None], flip_train_imgs, train_images)
+        flip_imgs = np.flip(train_images, axis=2)
+        train_images = np.where(right_bool[..., None, None], flip_imgs, train_images)
 
-        flip_val_imgs = np.flip(val_images, axis=2)
-        val_images = np.where(right_bool[..., None, None], flip_val_imgs, val_images)
+        flip_imgs = np.flip(val_images, axis=2)
+        val_images = np.where(right_bool[..., None, None], flip_imgs, val_images)
 
 
     if img_as_uint16: # Memory intensive

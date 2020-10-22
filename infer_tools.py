@@ -2,8 +2,6 @@ import numpy as np
 import skimage
 import math
 
-from .model_tools import load_densenet
-
 def np_preprocess(uint16=False):
     if not uint16:
         pixel_max = 255.
@@ -29,13 +27,13 @@ def np_preprocess(uint16=False):
     return inner_fxn
 
 # pos_label = {0: ap, 1: ll, 2: lo, 3: ls, 4: rl, 5: ro, 6: rs}
-def label_with_cat_model(npz_path, model_weights, uint16=True, n_class=7, file_name=None, steps=1000):
+def label_with_cat_model(npz_path, model_weights, load_model, uint16=True, n_class=7, file_name=None, steps=1000):
 
     with np.load(npz_path) as f:
         image_array = f['image_array']
         index_array = f['index_array']
 
-    model = load_densenet(input_size=image_array.shape[1], n_class=n_class)
+    model = load_model(input_size=image_array.shape[1], n_class=n_class)
     model.load_weights(model_weights).expect_partial()
     # suppress warning about not loading all params such as optimizer
     # no warning when run piecemeal in jupyter

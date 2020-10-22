@@ -7,10 +7,14 @@ import sys
 import numpy as np
 import re
 import os
+import matplotlib.pyplot as plt
 
 from skimage import io
 from glob import glob
 from sklearn import metrics
+
+from .fetch_data import data_get, prepare_dataset
+from .infer_tools import np_preprocess
 
 from tensorflow import keras
 from tensorflow.keras.models import Model
@@ -184,7 +188,7 @@ def train_numpy_keras(get_numpy_ds, batch_size=20, augment=position_augment(), v
         c_df[key] = val
     c_df.to_excel(excel_path, index=False)
 
-def eval_trained_model(get_numpy_ds, model_weights, net_input=224):
+def eval_cat_model(get_numpy_ds, model_weights, net_input=224):
     _, _, val_ds, n_val, test_ds, n_test, n_labels = get_numpy_ds
 
     model = load_densenet(input_size=net_input, n_class=n_labels)
@@ -210,3 +214,87 @@ def eval_trained_model(get_numpy_ds, model_weights, net_input=224):
     print(metrics.classification_report(y_true=true_labels, y_pred=pred_labels))
 
     # tile_alt_imshow(disc_imgs, titles=list(zip(correct_labels, incorrect_labels, incorrect_names)))
+
+def eval_scalar_model(params=None, as_unint16=True, scalar_val=120, use_ds=False, flip_pred=-1):
+    if params is None:
+        params = {
+            'label_col': 'angle',
+            'train_bool_col': 'new_train',
+            'df_excel': './pos_hard_processed/rot0to7000.xlsx',
+            'pos_df': './pos_hard_processed/pos_correct0to7000.xlsx',
+            'test_set_col': 'tr_val_te',
+            'flip_RtoL_col': 'true_label',
+            'val_npz': './pos_hard_npz/224_0to7000.npz',
+            'model_weight_root': './rot/model_7000_{}deg',
+            'out_excel_root': './rot/rot_out_7000_{}deg.xlsx'
+        }
+
+    label_col = params['label_col']
+    train_bool_col = params['train_bool_col']
+    df_excel = params['df_excel']
+    pos_df = params['pos_df']
+    test_set_col = params['test_set_col']
+    flip_RtoL_col = params['flip_RtoL_col']
+    val_npz = params['val_npz']
+    model_weights = params['model_weight_root'].format(scalar_val)
+    out_excel = params['out_excel_root'].format(scalar_val)
+
+    out_metric_final = pd.read_excel(out_excel)
+    for i in ['loss', 'val_loss']:
+        plt.plot(out_metric_final.index, out_metric_final[i])
+        plt.title(i)
+
+    if use_ds:
+        val_map = val_rot_map(scalar_val)
+        preprocess_map = preprocess_densenet
+        inner_preprocess = preprocess_map(uint16=as_unint16)
+        AUTOTUNE = tf.data.experimental.AUTOTUNE
+
+        (train_ds, n_train, val_ds, n_val, test_ds, n_test, n_labels) = data_get(
+            df_excel, label_col, train_bool_col,
+            train_npz=val_npz, val_npz=val_npz, img_as_uint16=as_unint16, flip_RtoL_col=flip_RtoL_col,
+            npz_df=pos_df, test_set_col=test_set_col)
+
+        c_ds = val_ds
+
+        orig_ds = c_ds.batch(500)
+        processed_ds = c_ds.map(trunc_name).cache().map(val_map).map(inner_preprocess).batch(500)
+
+        processed_iter = iter(processed_ds)
+        orig_iter = iter(orig_ds)
+
+        orig_item = next(orig_iter)
+        print('\norig')
+        orig_imgs, orig_labels, orig_idx = orig_item
+
+        processed_item = next(processed_iter)
+        print('\nprocessed_item')
+        proc_imgs, proc_labels = processed_item
+        scaled_proc_labels = proc_labels * scalar_val
+
+    else:
+        (train_images, train_labels, train_idx, train_indices,
+         val_images, val_labels, val_idx, val_indices,
+         test_images, test_labels, test_idx, test_indices,n_labels) = prepare_dataset(
+            df_excel, label_col, train_bool_col,
+            train_npz=val_npz, val_npz=val_npz, img_as_uint16=as_unint16,  flip_RtoL_col=flip_RtoL_col,
+            npz_df=pos_df, test_set_col=test_set_col)
+
+        orig_imgs = val_images
+        orig_labels = val_labels
+        orig_idx = val_idx
+
+        proc_imgs, orig_labels = np_preprocess(as_unint16)(orig_imgs, orig_labels)
+
+    n_class = 1
+    activation = tf.keras.activations.tanh
+    net = load_densenet(n_class=n_class, activation=activation)
+    net.load_weights(model_weights).expect_partial()
+
+    pred_angle = net.predict(proc_imgs)
+    scaled_pred_angle = flip_pred * pred_angle * scalar_val #pred angle opposite sign/direction of orig_labels
+    scaled_pred_angle = scaled_pred_angle.reshape([proc_imgs.shape[0]])
+
+    diff = np.abs(orig_labels - scaled_pred_angle)
+    ci = 1.96 * np.std(diff) / np.sqrt(diff.shape[0])
+    print('mean absolute error: {:.2f} +- {:.2f}'.format(np.mean(diff), ci))
