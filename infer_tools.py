@@ -63,7 +63,7 @@ def label_with_cat_model(npz_path, model_weights, load_model, uint16=True, n_cla
 
     return image_array, index_array, labels
 
-def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pvals=True, return_best=False):
+def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pvals=True, print_out=False, sort_val=None, part_bool=None):
     if scalar_list is None:
         scalar_list = [20, 40, 60, 80, 100, 120, 140, 160, 180]
 
@@ -80,29 +80,42 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
     str_labels = params['labels']
     str_preds = params['predictions']
 
-    #TODO: best_val=None
+    single_dict = {}
+    ensemble_dict = {}
+    sorted_single = {}
+    sorted_ensemble = {}
+    just_pvals = {}
+
+    with np.load(path_val.format(scalar_list[0]) + '.npz') as f:
+        one_labels = f[str_labels]
+    n = one_labels.shape[0]
+    if part_bool is None:
+        part_bool = [True] * n
+
     for i in scalar_list:
         one_path = path_val.format(i)
         with np.load(one_path + '.npz') as f:
-            one_labels = f[str_labels]
-            one_preds = f[str_preds]
+            one_labels = f[str_labels][part_bool]
+            one_preds = f[str_preds][part_bool]
 
         diff = np.abs(one_labels - one_preds)
         mean_diff = np.mean(diff)
         ci = 1.96 * np.std(diff) / np.sqrt(diff.shape[0])
-        print('{} MAE: {:.2f} +- {:.2f}'.format(i, mean_diff, ci))
+        single_dict[i] = {'scalar_val': i, 'mean_diff': mean_diff, 'ci': ci}
+        if print_out:
+            print('{} MAE: {:.2f} +- {:.2f}'.format(i, mean_diff, ci))
 
-    print('\n')
     for i, j in combs:
+        tmp_dict = {}
         one_path = path_val.format(i)
         with np.load(one_path + '.npz') as f:
-            one_labels = f[str_labels]
-            one_preds = f[str_preds]
+            one_labels = f[str_labels][part_bool]
+            one_preds = f[str_preds][part_bool]
 
         two_path = path_val.format(j)
         with np.load(two_path + '.npz') as f:
-            two_labels = f[str_labels]
-            two_preds = f[str_preds]
+            two_labels = f[str_labels][part_bool]
+            two_preds = f[str_preds][part_bool]
 
         one_diff = np.abs(one_labels - one_preds)
         two_diff = np.abs(two_labels - two_preds)
@@ -110,7 +123,10 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
             p_val = stats.ttest_rel(one_diff, two_diff).pvalue
         else:
             p_val = stats.ttest_rel(one_preds, two_preds).pvalue
-        print('curr vals {} and {} with p_val {:.4f}'.format(i, j, p_val))
+        tmp_dict['orig'] = {'p_val': p_val}
+        just_pvals[(i, j)] = p_val
+        if print_out:
+            print('\ncurr vals {} and {} with p_val {:.4f}'.format(i, j, p_val))
 
         mean_vals = (one_preds + two_preds) / 2
         max_vals = np.maximum(one_preds, two_preds)
@@ -136,6 +152,23 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
                 two_p_val = stats.ttest_rel(two_preds, mix_val).pvalue
             mean_diff = np.mean(mix_diff)
             ci = 1.96 * np.std(mix_diff) / np.sqrt(mix_diff.shape[0])
-            print('{} MAE: {:.2f} +- {:.2f}. one_p_val {:.4f}, two_p_val {:.4f}'.format(mix_name, mean_diff, ci, one_p_val, two_p_val))
+            one_name = '{}_pval'.format(i)
+            two_name = '{}_pval'.format(j)
+            tmp_dict[mix_name] = {'mean_diff': mean_diff, 'ci': ci, one_name: one_p_val, two_name:two_p_val}
+            if print_out:
+                print('{} MAE: {:.2f} +- {:.2f}. {}: {:.4f}, {}: {:.4f}'.format(mix_name, mean_diff, ci, one_name, one_p_val, two_name, two_p_val))
 
-        print('\n')
+        ensemble_dict[(i, j)] = tmp_dict
+
+    if sort_val is not None:
+        sorted_single = sorted(single_dict.items(), key=lambda x: x[1][sort_val], reverse=False)
+
+        for val_tup, dict_items in ensemble_dict.items():
+            for dict_key, dict_values in dict_items.items():
+                if sort_val in dict_values:
+                    sorted_ensemble[(*val_tup, dict_key)] = dict_values
+
+        sorted_ensemble = sorted(sorted_ensemble.items(), key=lambda x: x[1][sort_val], reverse=False)
+
+    return (single_dict, just_pvals, ensemble_dict, sorted_single, sorted_ensemble)
+
