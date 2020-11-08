@@ -170,5 +170,21 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
 
         sorted_ensemble = sorted(sorted_ensemble.items(), key=lambda x: x[1][sort_val], reverse=False)
 
-    return (single_dict, just_pvals, ensemble_dict, sorted_single, sorted_ensemble)
+    str_ensemble = {}
+    for key, value in ensemble_dict.items():
+        str_ensemble[str(key)] = value
+
+    str_p_vals = {}
+    for key, value in just_pvals.items():
+        str_p_vals[str(key)] = value
+
+    complete_dict = {
+        'single_dict': single_dict,
+        'just_pvals': str_p_vals,
+        'ensemble_dict': str_ensemble,
+        'sorted_single': sorted_single,
+        'sorted_ensemble': sorted_ensemble
+    }
+
+    return (single_dict, just_pvals, ensemble_dict, sorted_single, sorted_ensemble), complete_dict
 
