@@ -2,6 +2,7 @@ import numpy as np
 import skimage
 import math
 import itertools
+import json
 
 from scipy import stats
 
@@ -63,7 +64,8 @@ def label_with_cat_model(npz_path, model_weights, load_model, uint16=True, n_cla
 
     return image_array, index_array, labels
 
-def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pvals=True, print_out=False, sort_val=None, part_bool=None):
+def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pvals=True, print_out=False,
+                         sort_val=None, part_bool=None, fname=None):
     if scalar_list is None:
         scalar_list = [20, 40, 60, 80, 100, 120, 140, 160, 180]
 
@@ -99,9 +101,11 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
             one_preds = f[str_preds][part_bool]
 
         diff = np.abs(one_labels - one_preds)
+        max_error = np.max(diff)
+        max_error_loc = int(np.argmax(diff))
         mean_diff = np.mean(diff)
         ci = 1.96 * np.std(diff) / np.sqrt(diff.shape[0])
-        single_dict[i] = {'scalar_val': i, 'mean_diff': mean_diff, 'ci': ci}
+        single_dict[i] = {'scalar_val': i, 'mean_diff': mean_diff, 'ci': ci, 'max_error': max_error, 'max_error_loc': max_error_loc}
         if print_out:
             print('{} MAE: {:.2f} +- {:.2f}'.format(i, mean_diff, ci))
 
@@ -150,11 +154,13 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
             else:
                 one_p_val = stats.ttest_rel(one_preds, mix_val).pvalue
                 two_p_val = stats.ttest_rel(two_preds, mix_val).pvalue
+            max_error = np.max(mix_diff)
+            max_error_loc = int(np.argmax(mix_diff))
             mean_diff = np.mean(mix_diff)
             ci = 1.96 * np.std(mix_diff) / np.sqrt(mix_diff.shape[0])
             one_name = '{}_pval'.format(i)
             two_name = '{}_pval'.format(j)
-            tmp_dict[mix_name] = {'mean_diff': mean_diff, 'ci': ci, one_name: one_p_val, two_name:two_p_val}
+            tmp_dict[mix_name] = {'mean_diff': mean_diff, 'ci': ci, one_name: one_p_val, two_name: two_p_val, 'max_error': max_error, 'max_error_loc': max_error_loc}
             if print_out:
                 print('{} MAE: {:.2f} +- {:.2f}. {}: {:.4f}, {}: {:.4f}'.format(mix_name, mean_diff, ci, one_name, one_p_val, two_name, two_p_val))
 
@@ -185,6 +191,10 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
         'sorted_single': sorted_single,
         'sorted_ensemble': sorted_ensemble
     }
+
+    if fname is not None:
+        with open(fname, 'w') as f:
+            f.write(json.dumps(complete_dict))
 
     return (single_dict, just_pvals, ensemble_dict, sorted_single, sorted_ensemble), complete_dict
 

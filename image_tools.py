@@ -15,6 +15,18 @@ def derotate(image_array, label_array):
     img_holder = np.array(img_holder)
     return img_holder
 
+def deg_derotate(image_array, label_array, flip=None):
+    if flip is None:
+        flip = [False]*image_array.shape[0]
+    img_holder = []
+    for img, deg_label, flip_label in zip(image_array, label_array, flip):
+        _img = transform.rotate(img, deg_label, resize=False)
+        if flip_label:
+            _img = np.flip(_img, axis=1)
+        img_holder.append(_img)
+    img_holder = np.array(img_holder)
+    return img_holder
+
 def resize_label_array(label_array, size_tuple):
     old_h = label_array.shape[0]
     old_w = label_array.shape[1]
@@ -39,9 +51,10 @@ def resize_label_array(label_array, size_tuple):
     return resized_array
 
 def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_choice=1,
-                    width=40, height=40, save_it=None, h_slot=None, w_slot=None,
+                    width=40, height=40, save_it=None, h_slot=None, w_slot=None, hspace=0, wspace=0,
                     cmap='jet', alpha=0.3, vmin=None, vmax=None, colorbar=False,
-                    prob_array=None, force_single_channel=False, pat_boundaries=None, show_rl=True):
+                    prob_array=None, force_single_channel=False, pat_boundaries=None, show_rl=True, axis_titles=None,
+                    ):
 
     plot_heat_map = None
 
@@ -61,7 +74,9 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
         w_slot=2 # if only 1 img
 
     fig, axes = plt.subplots(h_slot, w_slot, figsize=(width, height))
-    fig.subplots_adjust(hspace=0.1, wspace=0)
+    fig.subplots_adjust(hspace=hspace, wspace=wspace)
+    # fig.text(.15, .85, 'hello', bbox={'facecolor': 'white', 'pad': 2}, fontsize=30,
+    # verticalalignment='top', horizontalalignment='left')
 
     #scaled_img_arrays = rescale_img(img_arrays)
     scaled_img_arrays = img_arrays
@@ -86,6 +101,11 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
             c_prob = prob_array[i]
             c_text = 'cls_0: {0:.2f}\ncls_1: {1:.2f}\ncls_2: {2:.2f}\ncls_3: {3:.2f}'.format(c_prob[0], c_prob[1], c_prob[2], c_prob[3])
             ax.text(10, 30, c_text, bbox={'facecolor': 'white', 'pad': 2})
+
+        if axis_titles is not None:
+            c_title = axis_titles[i]
+            ax.text(0.01, 0.01, c_title, bbox={'facecolor': 'white', 'pad': 2}, fontsize=30,
+                    verticalalignment='bottom', horizontalalignment='left', transform=ax.transAxes)
 
         if heat_maps is not None:
             resized_map = transform.resize(heat_maps[i], (224, 224), mode='reflect', anti_aliasing=True)
@@ -113,7 +133,7 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
         fig.colorbar(plot_heat_map)
 
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=300, format='png')
+        plt.savefig(str(save_it), dpi=300, format='tiff')
     else:
         plt.show()
 
