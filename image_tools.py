@@ -50,6 +50,53 @@ def resize_label_array(label_array, size_tuple):
 
     return resized_array
 
+def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None):
+    if third_dict is not None:
+        n=3
+    else:
+        n=2
+    f, axes = plt.subplots(1, n, figsize=(int(n*15), 15))
+    plot_aucs(one_dict, ax=axes[0], title='Position ROC curve')
+    plot_aucs(two_dict, ax=axes[1], int_labels=['0', '1'], str_labels=['No hardware', 'Positive hardware'], title='Hardware ROC curve')
+    if third_dict is not None:
+        plot_aucs(third_dict, ax=axes[2], int_labels=['0', '1', '2'], str_labels=['Neutral', 'Flexion', 'Extension'], title='Dynamic ROC curve')
+
+    if save_it is not None:
+        plt.savefig(str(save_it), dpi=300, format='tiff')
+
+def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=None, save_it=None): #get_out_values from calc_metrics
+    if int_labels is None:
+        # int_labels = [0, 1, 2, 3, 4, 5, 6, 7]
+        int_labels = [0, 1, 2, 3, 4, 5, 6]
+    if str_labels is None:
+        # str_labels = ['ap', 'll', 'lo', 'ls', 'rl', 'ro', 'rs', 'error']
+        str_labels = ['Anterior-posterior', 'Left lateral', 'Left oblique', 'Left sacral', 'Right lateral', 'Right oblique', 'Right sacral']
+
+    if ax is None:
+        f, ax = plt.subplots()
+    ax.set_xlabel('False positive rate')
+    ax.set_ylabel('True positive rate')
+    if title is None:
+        title = 'Receiver operator characteristic curve'
+    ax.set_title(title)
+
+    axin = ax.inset_axes([0.4, 0.4, 0.45, 0.45])
+    x1, x2, y1, y2 = -0.01, 0.1, 0.9, 1.01
+    axin.set_xlim(x1, x2)
+    axin.set_ylim(y1, y2)
+    # axin.set_xticks([0, 0.1, 0.2])
+    # axin.set_yticks([0.8, 0.9, 1.0])
+    ax.indicate_inset_zoom(axin, label=None)
+
+    for int_label, cname in zip(int_labels, str_labels):
+        ax.plot(out_vals_dict[int_label]['fpr'], out_vals_dict[int_label]['tpr'], label=cname)
+        axin.plot(out_vals_dict[int_label]['fpr'], out_vals_dict[int_label]['tpr'])
+
+    ax.legend(loc=4)
+    if save_it is not None:
+        plt.savefig(str(save_it), dpi=300, format='tiff')
+
+
 def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_choice=1,
                     width=40, height=40, save_it=None, h_slot=None, w_slot=None, hspace=0, wspace=0,
                     cmap='jet', alpha=0.3, vmin=None, vmax=None, colorbar=False,

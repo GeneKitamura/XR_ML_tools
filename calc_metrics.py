@@ -52,11 +52,13 @@ def get_out_values(predictions, ind_labels, ids, class_int=None, class_str=None,
 
         class_filter = (ind_labels == i)
 
-        i_name = str(i)
-        out_lib[i_name + '_out'] = post_threshold[class_filter]
-        out_lib[i_name + '_ids'] = ids[class_filter]
-        out_lib[i_name + '_auc'] = auc_val
-        out_lib[i_name + '_auc_SE'] = se
+        _idict = {}
+        _idict['ids'] = list(map(int, ids[class_filter]))
+        _idict['auc'] = float(auc_val)
+        _idict['auc_se'] = float(se)
+        _idict['fpr'] = list(map(float, fpr))
+        _idict['tpr'] = list(map(float, tpr))
+        out_lib[i] = _idict
 
     return out_lib
 
