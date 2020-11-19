@@ -65,7 +65,7 @@ def label_with_cat_model(npz_path, model_weights, load_model, uint16=True, n_cla
     return image_array, index_array, labels
 
 def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pvals=True, print_out=False,
-                         sort_val=None, part_bool=None, fname=None):
+                         sort_val=None, part_bool=None, fname=None, get_ensemble_outs=False):
     if scalar_list is None:
         scalar_list = [20, 40, 60, 80, 100, 120, 140, 160, 180]
 
@@ -93,6 +93,8 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
     n = one_labels.shape[0]
     if part_bool is None:
         part_bool = [True] * n
+    if get_ensemble_outs:
+        just_pvals['true_labels'] = one_labels.tolist()
 
     for i in scalar_list:
         one_path = path_val.format(i)
@@ -161,6 +163,10 @@ def ensemble_scalar_outs(scalar_list=None, params=None, path_val=None, diff_pval
             one_name = '{}_pval'.format(i)
             two_name = '{}_pval'.format(j)
             tmp_dict[mix_name] = {'mean_diff': mean_diff, 'ci': ci, one_name: one_p_val, two_name: two_p_val, 'max_error': max_error, 'max_error_loc': max_error_loc}
+            if get_ensemble_outs:
+                tmp_dict[mix_name]['mix_diff'] = mix_diff.tolist()
+                tmp_dict[mix_name]['mix_val'] = mix_val.tolist()
+
             if print_out:
                 print('{} MAE: {:.2f} +- {:.2f}. {}: {:.4f}, {}: {:.4f}'.format(mix_name, mean_diff, ci, one_name, one_p_val, two_name, two_p_val))
 
