@@ -114,7 +114,11 @@ def rotate_augment(deg_rotation=180, final_size=224):
         angle_change = label + rand_rot_val # can be greater than 180
         # labels are degree of correction, tfa rotates in opposite direction
         rotated_img = tfa.image.rotate(img, -angle_change * deg_to_radians, interpolation='BILINEAR')
-        norm_rot_angle = rand_rot_val / deg_rotation # to [-1, 1] #In direction of rotation, not degree of correction
+        # rotated up to deg_rotation, correct image rotation and change by rand_rot_val
+
+        norm_rot_angle = rand_rot_val / deg_rotation
+        # to [-1, 1] #Now in direction of rotation, not degree of correction
+        # range of rand_rot_val, so only up to 20, 40, 60, etc...
 
         #old
         # neut_img = tfa.image.rotate(img, -label * deg_to_radians, interpolation='BILINEAR')
@@ -131,6 +135,7 @@ def val_rot_map(deg_rotation=180):
 
     def inner_fxn(img, label):
         norm_rot_angle = -label / deg_rotation # in direction of rotation
+        # problem when label is greater than augmentation def_rotation value (results in value > 1 when NN output is maxed at 1)
         return img, norm_rot_angle
     return inner_fxn
 
