@@ -50,7 +50,7 @@ def resize_label_array(label_array, size_tuple):
 
     return resized_array
 
-def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None):
+def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None, dpi=300):
     if third_dict is not None:
         n=3
     else:
@@ -62,7 +62,7 @@ def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None):
         plot_aucs(third_dict, ax=axes[2], int_labels=['0', '1', '2'], str_labels=['Neutral', 'Flexion', 'Extension'], title='Dynamic ROC curve')
 
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=300, format='tiff')
+        plt.savefig(str(save_it), dpi=dpi, format='tiff')
 
 def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=None, save_it=None): #get_out_values from calc_metrics
     if int_labels is None:
@@ -99,7 +99,7 @@ def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=No
 
 def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_choice=1,
                     width=40, height=40, save_it=None, h_slot=None, w_slot=None, hspace=0, wspace=0,
-                    cmap='jet', alpha=0.3, vmin=None, vmax=None, colorbar=False,
+                    cmap='jet', alpha=0.3, vmin=None, vmax=None, colorbar=False, dpi=300, axis_title_font=30,
                     prob_array=None, force_single_channel=False, pat_boundaries=None, show_rl=True, axis_titles=None,
                     ):
 
@@ -151,7 +151,7 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
 
         if axis_titles is not None:
             c_title = axis_titles[i]
-            ax.text(0.01, 0.01, c_title, bbox={'facecolor': 'white', 'pad': 2}, fontsize=30,
+            ax.text(0.01, 0.01, c_title, bbox={'facecolor': 'white', 'pad': 2}, fontsize=axis_title_font,
                     verticalalignment='bottom', horizontalalignment='left', transform=ax.transAxes)
 
         if heat_maps is not None:
@@ -180,7 +180,7 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
         fig.colorbar(plot_heat_map)
 
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=300, format='tiff')
+        plt.savefig(str(save_it), dpi=dpi, format='tiff')
     else:
         plt.show()
 
