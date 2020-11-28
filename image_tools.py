@@ -56,10 +56,10 @@ def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None, dpi=300):
     else:
         n=2
     f, axes = plt.subplots(1, n, figsize=(int(n*15), 15))
-    plot_aucs(one_dict, ax=axes[0], title='Position ROC curve')
+    plot_aucs(one_dict, ax=axes[0], title='View ROC curve')
     plot_aucs(two_dict, ax=axes[1], int_labels=['0', '1'], str_labels=['No hardware', 'Positive hardware'], title='Hardware ROC curve')
     if third_dict is not None:
-        plot_aucs(third_dict, ax=axes[2], int_labels=['0', '1', '2'], str_labels=['Neutral', 'Flexion', 'Extension'], title='Dynamic ROC curve')
+        plot_aucs(third_dict, ax=axes[2], int_labels=['0', '1', '2'], str_labels=['Neutral', 'Flexion', 'Extension'], title='Dynamic position ROC curve')
 
     if save_it is not None:
         plt.savefig(str(save_it), dpi=dpi, format='tiff')
@@ -70,7 +70,7 @@ def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=No
         int_labels = [0, 1, 2, 3, 4, 5, 6]
     if str_labels is None:
         # str_labels = ['ap', 'll', 'lo', 'ls', 'rl', 'ro', 'rs', 'error']
-        str_labels = ['Anterior-posterior', 'Left lateral', 'Left oblique', 'Left sacral', 'Right lateral', 'Right oblique', 'Right sacral']
+        str_labels = ['Anterior-posterior', 'Left lateral', 'Left oblique', 'Left lumbosacral', 'Right lateral', 'Right oblique', 'Right lumbosacral']
 
     if ax is None:
         f, ax = plt.subplots()
