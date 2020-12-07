@@ -117,7 +117,7 @@ class WordParser():
         # no_relevant_text_bool = text_df['text_IP'].map(lambda x: void_term(x, ['Unicorn'], return_bool=True, print_word=print_word))
         no_relevant_text_bool = ~text_df['No relevant text']
         mingle_bool = ~text_df['mingle_addendum']
-        filter_bool = void_bool & no_relevant_text_bool #all needs to be True
+        filter_bool = void_bool & no_relevant_text_bool #all needs to be True (True & False is False)
         if exclude_mingle:
             filter_bool = filter_bool & mingle_bool
 
