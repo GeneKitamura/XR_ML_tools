@@ -160,13 +160,15 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
         'pat_id': 'PAT_ID',
         'non_montage_age': 'AGE',
         'non_montage_first_name': 'first_name',
-        'non_montage_last_name': 'last_name'}
+        'non_montage_last_name': 'last_name',
+        'orig_idx': 'orig_idx'}
 
     orig_surg_date = params['orig_surg_date']
     c_id = params['pat_id']
     age = params['non_montage_age']
     first_name = params['non_montage_first_name']
     last_name = params['non_montage_last_name']
+    orig_idx = params['orig_idx']
 
     both_df = pd.merge(gt_df, montage_df, how='left',
                        left_on=[first_name, last_name],
@@ -221,11 +223,11 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
     both_df['only_prior'] = (both_df['prior'] & ~both_df['after'])
     both_df['only_after'] = (~both_df['prior'] & both_df['after'])
 
-    columns = ['Organization', orig_surg_date, age, first_name, last_name,
-                       'Accession Number', 'Report Text', 'Patient Sex',
+    columns = [orig_idx, 'Organization', orig_surg_date, age, first_name, last_name,
+                       'Accession Number', 'Report Text', 'Patient Sex', 'Patient Age',
                        'Patient MRN', c_id,
                        'Exam Completed Date', 'time_diff', 'prior', 'after',
-                       'prior_after', 'only_prior', 'only_after', 'postop_bool', 'text_IP']
+                       'prior_after', 'only_prior', 'only_after', 'postop_bool', 'mingle_addendum', 'text_IP']
 
     if additional_columns is not None:
         columns = columns + additional_columns

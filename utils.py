@@ -20,10 +20,11 @@ def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
         'non_pos_fname': 'Patient First Name',
         'non_pos_lname': 'Patient Last Name'
         }
-    filtered_pos_df = positive_df[pd.to_numeric(positive_df['Patient Age'], errors='coerce').notna()]
-    if not filtered_pos_df['Patient Sex'].isin(['Male', 'Female', '']).all():
-        raise Exception("Check Patient Sex for postive_df")
-    filtered_pos_df = filtered_pos_df[(filtered_pos_df['Patient Sex'] != '')]
+    filtered_pos_df = positive_df[pd.to_numeric(positive_df[params['pos_age']], errors='coerce').notna()].copy()
+    filtered_pos_df[params['pos_sex']] = filtered_pos_df[params['pos_sex']].fillna('')
+    # if not filtered_pos_df['Patient Sex'].isin(['Male', 'Female', '']).all():
+    #     raise Exception("Check Patient Sex for postive_df")
+    filtered_pos_df = filtered_pos_df[(filtered_pos_df[params['pos_sex']] != '')]
 
     prior_age = filtered_pos_df[params['pos_age']]
     age_hist = plt.hist(prior_age, bins=5)
