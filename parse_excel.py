@@ -146,7 +146,7 @@ def read_montage(montage_file, terms_file, exclude_mingle=False):
     short_montage['postop_bool'] = safe_text_df['postop_bool']
     short_montage['mingle_addendum'] = safe_text_df['mingle_addendum']
     short_montage['text_IP'] = safe_text_df['text_IP']
-    short_montage = short_montage[safe_text_df['safe_bool']].copy()
+    short_montage = short_montage[safe_text_df['safe_bool']].copy() # exclude no text and inappropriate/incorrect terms
 
     print('montage_n {}'.format(short_montage.shape))
 
@@ -254,7 +254,7 @@ def merge_slice_dfs(gt_df, montage_df, params=None, prior_date=-60, after_date=1
 
     return prior_df, no_prior_df
 
-def format_no_montage_dfs(first_no_prior, remain_no_prior, params, to_save=None, additional_columns=None):
+def format_no_montage_dfs(first_no_prior, remain_no_prior, params, to_save=None, additional_columns=None, fill_cols=None):
 
     pid = params['id']
     dob = params['dob']
@@ -281,16 +281,10 @@ def format_no_montage_dfs(first_no_prior, remain_no_prior, params, to_save=None,
 
     tot_no_priors_df = tot_no_priors_df[relevant_columns].copy()
 
-    # tot_no_priors_df['Patient_MRN'] = ''
-    tot_no_priors_df['Pre_op_Organization'] = ''
-    tot_no_priors_df['Pre_op_Accession_#'] = ''
-    tot_no_priors_df['Pre_op_study_date'] = ''
-    # tot_no_priors_df['Side_with_abnormality'] = ''
-    # tot_no_priors_df['Post_op_Organization'] = ''
-    # tot_no_priors_df['Post_op_Accession_#'] = ''
-    # tot_no_priors_df['Post_op_study_date'] = ''
-    tot_no_priors_df['Note'] = ''
-    tot_no_priors_df['same_day_contra_Accession'] = ''
+    if fill_cols is None:
+        fill_cols = ['Pre_op_Organization', 'Pre_op_Accession_#', 'Pre_op_study_date', 'Note', 'same_day_contra_Accession']
+
+    pd.concat([tot_no_priors_df, pd.DataFrame(columns=fill_cols)], sort=False)
 
     if to_save is not None:
         tot_no_priors_df[surg_date] = tot_no_priors_df[surg_date].dt.date

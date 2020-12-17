@@ -9,7 +9,17 @@ def array_print(*args):
 def array_min_max(*args):
     for i in args:
         print(np.min(i), np.max(i))
-        
+
+# dt as accessor for datetime properties of series, HOWEVER NaT becomes 'NaT' string with dt accessor
+# for Timestamp (single item), can use strftime directy.  NaT thorws error
+def mix_date_parse(c_item): # use for map or applymap for pd.dt/series
+    try:
+        dt_item = pd.to_datetime(c_item)
+        dt_item = dt_item.strftime("%m-%d-%Y") #NAT
+        return dt_item
+    except:
+        return c_item
+
 def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
     if params is None:
         params = {
