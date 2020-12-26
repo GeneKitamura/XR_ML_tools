@@ -62,7 +62,7 @@ def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None, dpi=300):
         plot_aucs(third_dict, ax=axes[2], int_labels=['0', '1', '2'], str_labels=['Neutral', 'Flexion', 'Extension'], title='Dynamic position ROC curve')
 
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=dpi, format='tiff')
+        plt.savefig(str(save_it), dpi=dpi, format='tiff', bbox_inches='tight', pad_inches=0.1)
 
 def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=None, save_it=None): #get_out_values from calc_metrics
     if int_labels is None:
@@ -94,12 +94,12 @@ def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=No
 
     ax.legend(loc=4)
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=300, format='tiff')
+        plt.savefig(str(save_it), dpi=100, format='tiff', bbox_inches='tight', pad_inches=0)
 
 
 def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_choice=1,
                     width=40, height=40, save_it=None, h_slot=None, w_slot=None, hspace=0, wspace=0,
-                    cmap='jet', alpha=0.3, vmin=None, vmax=None, colorbar=False, dpi=300, axis_title_font=30,
+                    cmap='jet', alpha=0.3, vmin=None, vmax=None, colorbar=False, dpi=100, axis_title_font=30,
                     prob_array=None, force_single_channel=False, pat_boundaries=None, show_rl=True, axis_titles=None,
                     ):
 
@@ -180,7 +180,7 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
         fig.colorbar(plot_heat_map)
 
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=dpi, format='tiff')
+        plt.savefig(str(save_it), dpi=dpi, format='tiff', bbox_inches='tight', pad_inches=0)
     else:
         plt.show()
 
