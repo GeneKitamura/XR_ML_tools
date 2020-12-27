@@ -238,3 +238,44 @@ def save_img_as_jpg(_img, c_name):
     fig.savefig(c_name, dpi=1000, format='jpeg')
     plt.close(fig)
 
+# pixel size is same as input
+def mpl_301_303_save_image(_img, c_name, dpi=100):
+    h, w = _img.shape
+    fig, axes = plt.subplots(figsize=(h/dpi, w/dpi))
+    fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+    axes.imshow(_img)
+    axes.axis('off')
+    plt.margins(0,0) #need
+    plt.gca().xaxis.set_major_locator(plt.NullLocator()) #need
+    plt.gca().yaxis.set_major_locator(plt.NullLocator()) #need
+    plt.savefig(c_name, dpi=dpi, format='tiff', bbox_inches='tight', pad_inches=0)
+
+def mpl_301_303_tile_image(_img):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+    fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+    for i in axes.flatten():
+        i.imshow(_img)
+        i.axis('off')
+    # don't need the stuff for tiled images
+    # plt.margins(0,0)
+    # plt.gca().xaxis.set_major_locator(plt.NullLocator())
+    # plt.gca().yaxis.set_major_locator(plt.NullLocator())
+    plt.savefig('dog_tile', dpi=100, format='png') # no bbox_inches here
+
+# pixel size is same as input
+def mpl_321_save_img(_img, c_name, dpi=100):
+    h, w = _img.shape
+    fig, axes = plt.subplots(figsize=(h/dpi, w/dpi))
+    fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0)
+    axes.imshow(_img)
+    axes.axis('off')
+    plt.savefig(c_name, dpi=dpi, format='jpeg')
+    # do not use bbox_inches='tight', it actually creates padding
+
+def mpl_321_tile_image(_img):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+    fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+    for i in axes.flatten():
+        i.imshow(_img)
+        i.axis('off')
+    plt.savefig('dog_tile_321', dpi=100, format='png')
