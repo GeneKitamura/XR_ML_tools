@@ -242,6 +242,8 @@ def save_img_as_jpg(_img, c_name):
 def save_inp_as_output(_img, c_name, dpi=100):
     h, w, _ = _img.shape
     fig, axes = plt.subplots(figsize=(h/dpi, w/dpi))
+    _img = skimage.img_as_ubyte(_img)
+    _img = exposure.equalize_hist(_img)
     fig.subplots_adjust(top=1.0, bottom=0, right=1.0, left=0, hspace=0, wspace=0) # axes fills figure
     axes.imshow(_img)
     axes.axis('off')
