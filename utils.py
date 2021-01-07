@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from scipy import stats
+
 def array_print(*args):
     for i in args:
         print(i.shape)
@@ -57,6 +59,17 @@ def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
     sampled_montage_df = sampled_montage_df.drop_duplicates(subset=[params['non_pos_fname'], params['non_pos_lname'], 'Exam Completed Date'])
     plt.hist(sampled_montage_df[params['non_pos_age']], bins=age_bounds)
     return sampled_montage_df
+
+def sex_age_comparison(a_df, b_df):
+    a = a_df['Patient Age']
+    a = a[a.notna()]
+    b = b_df['Patient Age']
+    b = b[b.notna()]
+    print('Age stat: {}\n'.format(stats.ttest_ind(a, b)))
+
+    c = a_df['Patient Sex'].value_counts()
+    d = b_df['Patient Sex'].value_counts()
+    print('Sex stat p_val: {}'.format(stats.chi2_contingency([[c['Male'], c['Female']], [d['Male'], d['Female']]])[1]))
 
 def extract_idx_from_df(excel_n):
     cdf = pd.read_excel(excel_n)

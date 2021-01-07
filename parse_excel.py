@@ -129,7 +129,7 @@ class WordParser():
 def read_montage(montage_file, terms_file, exclude_mingle=False):
 
     montage_df = pd.read_excel(montage_file)
-    montage_df = montage_df.drop_duplicates(subset=['Accession Number'])
+    montage_df = montage_df.drop_duplicates()
     short_montage = montage_df[['Organization', 'Accession Number', 'Report Text', 'Patient Sex',
                                   'Patient Age', 'Patient MRN', 'Patient First Name', 'Patient Last Name',
                                   'Exam Completed Date']].copy()
@@ -282,9 +282,9 @@ def format_no_montage_dfs(first_no_prior, remain_no_prior, params, to_save=None,
     tot_no_priors_df = tot_no_priors_df[relevant_columns].copy()
 
     if fill_cols is None:
-        fill_cols = ['Pre_op_Organization', 'Pre_op_Accession_#', 'Pre_op_study_date', 'Note', 'same_day_contra_Accession']
+        fill_cols = ['Pre_op_Organization', 'Pre_op_Accession_#', 'Pre_op_study_date', 'same_day_contra_Accession']
 
-    pd.concat([tot_no_priors_df, pd.DataFrame(columns=fill_cols)], sort=False)
+    tot_no_priors_df = pd.concat([tot_no_priors_df, pd.DataFrame(columns=fill_cols)], sort=False)
 
     if to_save is not None:
         tot_no_priors_df[surg_date] = tot_no_priors_df[surg_date].dt.date
