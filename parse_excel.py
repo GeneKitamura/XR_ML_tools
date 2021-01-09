@@ -86,7 +86,7 @@ class WordParser():
         text_df = pd.DataFrame(stripped_series)
         text_df[alias_name] = id_and_report_df[alias_name]
 
-        # text_df['report_len'] = text_df[working_report_name].map(lambda x: len(x))
+        text_df['report_nonzero'] = text_df[working_report_name].map(lambda x: len(x)>0)
         # text_df['report_bool'] = (text_df['report_len'] != 0)
         text_df['mingle_addendum'] = id_and_report_df['mingle_addendum']
         # text_df['laterality_discreptancy'] = id_and_report_df['laterality_discreptancy']
@@ -98,7 +98,7 @@ class WordParser():
         self.text_series = stripped_series
         self.text_df = text_df
 
-    def filter_text(self, print_word=False, exclude_mingle=False):
+    def filter_text(self, print_word=False, exclude_mingle=False, nonempty_report=False):
 
         if self.text_df is None:
             self.clean_text()
@@ -115,9 +115,12 @@ class WordParser():
         void_bool = text_df['text_IP'].map(lambda x: void_term(x, void_terms, return_bool=True, print_word=print_word))
         no_relevant_text_bool = ~text_df['No relevant text']
         mingle_bool = ~text_df['mingle_addendum']
+        nonempty_bool = text_df['report_nonzero']
         filter_bool = void_bool & no_relevant_text_bool #all needs to be True (True & False is False)
         if exclude_mingle:
             filter_bool = filter_bool & mingle_bool
+        if nonempty_report:
+            filter_bool = filter_bool & nonempty_bool
 
         text_df['safe_bool'] = filter_bool
 
@@ -126,7 +129,7 @@ class WordParser():
 
         self.safe_text = text_df
 
-def read_montage(montage_file, terms_file, exclude_mingle=False):
+def read_montage(montage_file, terms_file, exclude_mingle=False, nonempty_report=False, inclusion_list=None):
 
     montage_df = pd.read_excel(montage_file)
     montage_df = montage_df.drop_duplicates()
@@ -139,14 +142,17 @@ def read_montage(montage_file, terms_file, exclude_mingle=False):
 
     # use impression since many reports don't have findings.
     # use impression for hardware so it's not too specific
-    processed_montage.clean_text(get_findings=False)
-    processed_montage.filter_text(exclude_mingle=exclude_mingle)
+    processed_montage.clean_text(get_findings=False, inclusion_list=inclusion_list)
+
+    # nonempty reports after inclusion list
+    processed_montage.filter_text(exclude_mingle=exclude_mingle, nonempty_report=nonempty_report)
 
     safe_text_df = processed_montage.safe_text
     short_montage['postop_bool'] = safe_text_df['postop_bool']
     short_montage['mingle_addendum'] = safe_text_df['mingle_addendum']
     short_montage['text_IP'] = safe_text_df['text_IP']
-    short_montage = short_montage[safe_text_df['safe_bool']].copy() # exclude no text and inappropriate/incorrect terms
+    short_montage = short_montage[safe_text_df['safe_bool']].copy()
+    # exclude no finding/impression and inappropriate/incorrect terms
 
     print('montage_n {}'.format(short_montage.shape))
 
