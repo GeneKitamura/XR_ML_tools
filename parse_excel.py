@@ -83,11 +83,10 @@ class WordParser():
         if post_inclusion_validate_list is not None:
             stripped_series = stripped_series.map(lambda x: validate_term(x, post_inclusion_validate_list))
 
-        text_df = pd.DataFrame(stripped_series)
+        text_df = pd.DataFrame(stripped_series) # from series to df, only contains [working_report_name]
         text_df[alias_name] = id_and_report_df[alias_name]
 
         text_df['report_nonzero'] = text_df[working_report_name].map(lambda x: len(x)>0)
-        # text_df['report_bool'] = (text_df['report_len'] != 0)
         text_df['mingle_addendum'] = id_and_report_df['mingle_addendum']
         # text_df['laterality_discreptancy'] = id_and_report_df['laterality_discreptancy']
         text_df['No relevant text'] = text_df[working_report_name].map(lambda x: validate_term(x, ['Unicorn'], return_bool=True))

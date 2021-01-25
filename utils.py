@@ -60,15 +60,21 @@ def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
     plt.hist(sampled_montage_df[params['non_pos_age']], bins=age_bounds)
     return sampled_montage_df
 
-def sex_age_comparison(a_df, b_df):
-    a = a_df['Patient Age']
+def sex_age_comparison(a_df, b_df, params=None):
+    if params is None:
+        params = {'a_age': 'Patient Age',
+        'b_age': 'Patient Age',
+        'a_sex': 'Patient Sex',
+        'b_sex': 'Patient Sex'}
+
+    a = a_df[params['a_age']]
     a = a[a.notna()]
-    b = b_df['Patient Age']
+    b = b_df[params['b_age']]
     b = b[b.notna()]
     print('Age stat: {}\n'.format(stats.ttest_ind(a, b)))
 
-    c = a_df['Patient Sex'].value_counts()
-    d = b_df['Patient Sex'].value_counts()
+    c = a_df[params['a_sex']].value_counts()
+    d = b_df[params['b_sex']].value_counts()
     print('Sex stat p_val: {}'.format(stats.chi2_contingency([[c['Male'], c['Female']], [d['Male'], d['Female']]])[1]))
 
 def extract_idx_from_df(excel_n):
