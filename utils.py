@@ -56,7 +56,7 @@ def sex_age_sample(positive_df, non_pos_df, sample_n, params=None):
         expected_fems = c_df[c_df[params['non_pos_sex']] == 'Female'].sample(int(fem_prop * expected_samples[n]), replace=True)
         sampled_montage_df = pd.concat([sampled_montage_df, expected_males, expected_fems])
 
-    sampled_montage_df = sampled_montage_df.drop_duplicates(subset=[params['non_pos_fname'], params['non_pos_lname'], 'Exam Completed Date'])
+    sampled_montage_df = sampled_montage_df.drop_duplicates(subset=[params['non_pos_fname'], params['non_pos_lname'], 'Exam Completed Date', 'Accession Number'])
     plt.hist(sampled_montage_df[params['non_pos_age']], bins=age_bounds)
     return sampled_montage_df
 
