@@ -155,7 +155,8 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
                     verticalalignment='bottom', horizontalalignment='left', transform=ax.transAxes)
 
         if heat_maps is not None:
-            resized_map = transform.resize(heat_maps[i], (224, 224), mode='reflect', anti_aliasing=True)
+            # resized_map = transform.resize(heat_maps[i], (224, 224), mode='reflect', anti_aliasing=True)
+            resized_map = heat_maps[i]
             # resized_map = rescale_img(resized_map)
             plot_heat_map = ax.imshow(resized_map, cmap=cmap, alpha=alpha, vmin=vmin, vmax=vmax)
 
