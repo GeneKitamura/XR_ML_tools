@@ -134,6 +134,7 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
         #p2, p98 = np.percentile(img, (2, 98))
         #img = exposure.rescale_intensity(img, in_range=(p2, p98))
         img = exposure.equalize_hist(img)
+        img_dims = img.shape[:2]
 
         if labels is not None:
             c_labels = resize_label_array(labels[i], (img_h, img_w))
@@ -155,10 +156,10 @@ def tile_alt_imshow(img_arrays, heat_maps=None, labels=None, titles=None, label_
                     verticalalignment='bottom', horizontalalignment='left', transform=ax.transAxes)
 
         if heat_maps is not None:
-            # resized_map = transform.resize(heat_maps[i], (224, 224), mode='reflect', anti_aliasing=True)
-            resized_map = heat_maps[i]
-            # resized_map = rescale_img(resized_map)
-            plot_heat_map = ax.imshow(resized_map, cmap=cmap, alpha=alpha, vmin=vmin, vmax=vmax)
+            c_heatmap = heat_maps[i]
+            if c_heatmap.shape[:2] != img_dims: # make sure (h,w) is same betwee img and heatmap
+                c_heatmap = transform.resize(c_heatmap, img_dims, mode='reflect', anti_aliasing=True)
+            plot_heat_map = ax.imshow(c_heatmap, cmap=cmap, alpha=alpha, vmin=vmin, vmax=vmax)
 
         if show_rl:
             ax.text(int(0.05*img_w), img_h//2, 'RIGHT', fontsize=10, color='red')
