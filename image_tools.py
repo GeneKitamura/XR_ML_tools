@@ -62,7 +62,7 @@ def multiple_auc(one_dict, two_dict, third_dict=None, save_it=None, dpi=300):
         plot_aucs(third_dict, ax=axes[2], int_labels=['0', '1', '2'], str_labels=['Neutral', 'Flexion', 'Extension'], title='Dynamic position ROC curve')
 
     if save_it is not None:
-        plt.savefig(str(save_it), dpi=dpi, format='tiff', bbox_inches='tight', pad_inches=0.1)
+        plt.savefig(str(save_it), dpi=dpi, format='tiff', bbox_inches='tight')
 
 def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=None, save_it=None): #get_out_values from calc_metrics
     if int_labels is None:
@@ -80,7 +80,7 @@ def plot_aucs(out_vals_dict, int_labels=None, title=None, str_labels=None, ax=No
         title = 'Receiver operator characteristic curve'
     ax.set_title(title)
 
-    axin = ax.inset_axes([0.4, 0.4, 0.45, 0.45])
+    axin = ax.inset_axes([0.27, 0.45, 0.45, 0.45])
     x1, x2, y1, y2 = -0.01, 0.1, 0.9, 1.01
     axin.set_xlim(x1, x2)
     axin.set_ylim(y1, y2)
